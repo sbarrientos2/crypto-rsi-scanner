@@ -578,6 +578,29 @@
             font-size: 0.9rem;
         }
 
+        /* Overbought/Oversold indicators */
+        .rsi-indicator {
+            font-size: 0.6rem;
+            padding: 0.15rem 0.35rem;
+            border-radius: 3px;
+            margin-left: 0.5rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            vertical-align: middle;
+        }
+
+        .rsi-indicator.overbought {
+            background: rgba(255, 51, 102, 0.2);
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+        }
+
+        .rsi-indicator.oversold {
+            background: rgba(0, 212, 255, 0.2);
+            color: var(--accent-cyan);
+            border: 1px solid var(--accent-cyan);
+        }
+
         /* Star Button */
         .star-btn {
             background: none;
@@ -951,6 +974,14 @@
             return value !== null ? value.toFixed(1) : '—';
         }
 
+        // Get overbought/oversold indicator
+        function getRSIIndicator(value) {
+            if (value === null) return '';
+            if (value >= 70) return '<span class="rsi-indicator overbought">OB</span>';
+            if (value <= 30) return '<span class="rsi-indicator oversold">OS</span>';
+            return '';
+        }
+
         // Update loading progress
         function updateProgress(current, total, message) {
             const percent = Math.round((current / total) * 100);
@@ -1172,7 +1203,7 @@
                     </td>
                     <td>
                         <div class="rsi-cell">
-                            <span class="rsi-value">${formatRSI(item.rsi4h)}</span>
+                            <span class="rsi-value">${formatRSI(item.rsi4h)}${getRSIIndicator(item.rsi4h)}</span>
                             <div class="rsi-bar">
                                 <div class="rsi-bar-fill ${getRSIClass(item.rsi4h)}"
                                      style="width: ${item.rsi4h !== null ? item.rsi4h : 0}%"></div>
@@ -1181,7 +1212,7 @@
                     </td>
                     <td>
                         <div class="rsi-cell">
-                            <span class="rsi-value">${formatRSI(item.rsi1d)}</span>
+                            <span class="rsi-value">${formatRSI(item.rsi1d)}${getRSIIndicator(item.rsi1d)}</span>
                             <div class="rsi-bar">
                                 <div class="rsi-bar-fill ${getRSIClass(item.rsi1d)}"
                                      style="width: ${item.rsi1d !== null ? item.rsi1d : 0}%"></div>
@@ -1190,7 +1221,7 @@
                     </td>
                     <td>
                         <div class="rsi-cell">
-                            <span class="rsi-value">${formatRSI(item.rsi1w)}</span>
+                            <span class="rsi-value">${formatRSI(item.rsi1w)}${getRSIIndicator(item.rsi1w)}</span>
                             <div class="rsi-bar">
                                 <div class="rsi-bar-fill ${getRSIClass(item.rsi1w)}"
                                      style="width: ${item.rsi1w !== null ? item.rsi1w : 0}%"></div>
