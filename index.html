@@ -1044,7 +1044,17 @@
 
             } catch (error) {
                 console.error('Scan failed:', error);
-                document.getElementById('loadingProgress').textContent = 'Scan failed. Please try again.';
+                loadingOverlay.classList.remove('active');
+
+                // If we have partial data, still show it
+                if (allData.length > 0) {
+                    updateStats();
+                    applyFilterAndSort();
+                    dataTable.classList.add('active');
+                } else {
+                    emptyState.textContent = 'Scan failed. Please try again.';
+                    emptyState.classList.add('active');
+                }
             }
 
             refreshBtn.disabled = false;
