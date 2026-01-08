@@ -1523,6 +1523,55 @@
             }, 1000);
         }
 
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            const searchInput = document.getElementById('searchInput');
+            const isTyping = document.activeElement === searchInput;
+
+            // Allow Escape to work even when typing
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                searchInput.blur();
+                setFilter('all');
+                return;
+            }
+
+            // Don't trigger shortcuts when typing in search
+            if (isTyping) return;
+
+            switch (e.key.toLowerCase()) {
+                case 'r':
+                    e.preventDefault();
+                    startScan();
+                    break;
+                case '/':
+                    e.preventDefault();
+                    searchInput.focus();
+                    break;
+                case 'a':
+                    setFilter('all');
+                    break;
+                case 's':
+                    setFilter('starred');
+                    break;
+                case 'd':
+                    setFilter('divergence');
+                    break;
+                case 'f':
+                    setFilter('strong');
+                    break;
+                case 'b':
+                    setFilter('bullish');
+                    break;
+                case 'm':
+                    setFilter('mixed');
+                    break;
+                case 'x':
+                    setFilter('bearish');
+                    break;
+            }
+        });
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             startScan();
