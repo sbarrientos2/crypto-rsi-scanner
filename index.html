@@ -1058,6 +1058,7 @@
             // Check for Bullish Divergence:
             // Price: Low -> Higher Low (price rising)
             // RSI: Low -> Lower Low (RSI falling)
+            // MUST be in oversold zone (RSI < 30) to be valid
             if (priceSwingLows.length >= 2 && rsiSwingLows.length >= 2) {
                 const [priceLow1, priceLow2] = priceSwingLows.slice(-2);
                 const [rsiLow1, rsiLow2] = rsiSwingLows.slice(-2);
@@ -1068,7 +1069,8 @@
 
                 if (priceDistance <= 14 && priceDistance >= 3 && rsiDistance <= 14 && rsiDistance >= 3) {
                     // Bullish: Price makes higher low, RSI makes lower low
-                    if (priceLow2.value > priceLow1.value && rsiLow2.value < rsiLow1.value) {
+                    // Only valid if RSI is in oversold territory (< 30)
+                    if (priceLow2.value > priceLow1.value && rsiLow2.value < rsiLow1.value && rsiLow2.value < 30) {
                         return 'bullish';
                     }
                 }
@@ -1077,6 +1079,7 @@
             // Check for Bearish Divergence:
             // Price: High -> Higher High (price rising)
             // RSI: High -> Lower High (RSI falling)
+            // MUST be in overbought zone (RSI > 70) to be valid
             if (priceSwingHighs.length >= 2 && rsiSwingHighs.length >= 2) {
                 const [priceHigh1, priceHigh2] = priceSwingHighs.slice(-2);
                 const [rsiHigh1, rsiHigh2] = rsiSwingHighs.slice(-2);
@@ -1087,7 +1090,8 @@
 
                 if (priceDistance <= 14 && priceDistance >= 3 && rsiDistance <= 14 && rsiDistance >= 3) {
                     // Bearish: Price makes higher high, RSI makes lower high
-                    if (priceHigh2.value > priceHigh1.value && rsiHigh2.value < rsiHigh1.value) {
+                    // Only valid if RSI is in overbought territory (> 70)
+                    if (priceHigh2.value > priceHigh1.value && rsiHigh2.value < rsiHigh1.value && rsiHigh2.value > 70) {
                         return 'bearish';
                     }
                 }
