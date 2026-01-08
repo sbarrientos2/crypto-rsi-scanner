@@ -485,6 +485,29 @@
             color: var(--text-primary);
         }
 
+        .token-link {
+            color: var(--text-primary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: color 0.2s ease;
+        }
+
+        .token-link:hover {
+            color: var(--accent-cyan);
+        }
+
+        .token-link .chart-icon {
+            font-size: 0.7rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .token-link:hover .chart-icon {
+            opacity: 1;
+        }
+
         .token-pair {
             font-size: 0.75rem;
             color: var(--text-muted);
@@ -1196,7 +1219,13 @@
                         <div class="token-cell">
                             <div class="token-icon">${item.baseAsset.slice(0, 2)}</div>
                             <div>
-                                <div class="token-name">${item.baseAsset}</div>
+                                <a href="https://www.tradingview.com/chart/?symbol=BINANCE:${item.symbol}"
+                                   target="_blank"
+                                   class="token-link"
+                                   title="Open ${item.baseAsset} chart on TradingView">
+                                    <span class="token-name">${item.baseAsset}</span>
+                                    <span class="chart-icon">📈</span>
+                                </a>
                                 <div class="token-pair">${item.symbol}</div>
                             </div>
                         </div>
