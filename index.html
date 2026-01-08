@@ -1045,13 +1045,12 @@
 
             if (recentCandles.length < 10 || recentRSI.length < 10) return null;
 
-            // Extract price lows and highs
-            const priceLows = recentCandles.map(c => c.low);
-            const priceHighs = recentCandles.map(c => c.high);
+            // Use Close prices for divergence calculation (not High/Low)
+            const priceCloses = recentCandles.map(c => c.close);
 
-            // Find swing points
-            const priceSwingLows = findSwingLows(priceLows, 2);
-            const priceSwingHighs = findSwingHighs(priceHighs, 2);
+            // Find swing points using Close prices
+            const priceSwingLows = findSwingLows(priceCloses, 2);
+            const priceSwingHighs = findSwingHighs(priceCloses, 2);
             const rsiSwingLows = findSwingLows(recentRSI, 2);
             const rsiSwingHighs = findSwingHighs(recentRSI, 2);
 
