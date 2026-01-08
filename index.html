@@ -675,6 +675,114 @@
             color: var(--bg-primary);
         }
 
+        /* Help Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-title {
+            font-family: var(--font-mono);
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem;
+            line-height: 1;
+            transition: color 0.2s ease;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        .help-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .help-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .help-section-title {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--accent-cyan);
+            margin-bottom: 0.75rem;
+        }
+
+        .help-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .help-key {
+            font-family: var(--font-mono);
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            text-align: center;
+            min-width: 2rem;
+        }
+
+        .help-desc {
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+        }
+
+        .help-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
         /* Empty State */
         .empty-state {
             display: none;
@@ -881,6 +989,89 @@
                 <tbody id="tableBody">
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="modal-overlay" id="helpModal" onclick="closeHelp(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 class="modal-title">Keyboard Shortcuts & Guide</h2>
+                <button class="modal-close" onclick="toggleHelp()">&times;</button>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">Navigation</div>
+                <div class="help-grid">
+                    <span class="help-key">R</span>
+                    <span class="help-desc">Refresh data</span>
+                    <span class="help-key">/</span>
+                    <span class="help-desc">Focus search box</span>
+                    <span class="help-key">Esc</span>
+                    <span class="help-desc">Clear search & reset filters</span>
+                    <span class="help-key">?</span>
+                    <span class="help-desc">Toggle this help</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">Filters</div>
+                <div class="help-grid">
+                    <span class="help-key">A</span>
+                    <span class="help-desc">All tokens</span>
+                    <span class="help-key">S</span>
+                    <span class="help-desc">⭐ Starred only</span>
+                    <span class="help-key">D</span>
+                    <span class="help-desc">📊 Divergence only</span>
+                    <span class="help-key">F</span>
+                    <span class="help-desc">🔥 Strong (RSI &gt; 60 all timeframes)</span>
+                    <span class="help-key">B</span>
+                    <span class="help-desc">✅ Bullish (RSI &gt; 50 all timeframes)</span>
+                    <span class="help-key">M</span>
+                    <span class="help-desc">⚠️ Mixed</span>
+                    <span class="help-key">X</span>
+                    <span class="help-desc">❌ Bearish (RSI &lt; 50 all timeframes)</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">RSI Badges</div>
+                <div class="help-grid">
+                    <span class="help-key" style="background: rgba(255,51,102,0.2); color: #ff3366; border-color: #ff3366;">OB</span>
+                    <span class="help-desc">Overbought — RSI ≥ 70</span>
+                    <span class="help-key" style="background: rgba(0,212,255,0.2); color: #00d4ff; border-color: #00d4ff;">OS</span>
+                    <span class="help-desc">Oversold — RSI ≤ 30</span>
+                    <span class="help-key" style="background: rgba(0,255,136,0.2); color: #00ff88; border-color: #00ff88;">DIV↑</span>
+                    <span class="help-desc">Bullish Divergence — Price higher low, RSI lower low (in oversold)</span>
+                    <span class="help-key" style="background: rgba(255,51,102,0.2); color: #ff3366; border-color: #ff3366;">DIV↓</span>
+                    <span class="help-desc">Bearish Divergence — Price higher high, RSI lower high (in overbought)</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">Status Legend</div>
+                <div class="help-grid">
+                    <span class="help-key">🔥</span>
+                    <span class="help-desc">Strong — All timeframes RSI &gt; 60</span>
+                    <span class="help-key">✅</span>
+                    <span class="help-desc">Bullish — All timeframes RSI &gt; 50</span>
+                    <span class="help-key">⚠️</span>
+                    <span class="help-desc">Mixed — Some above 50, some below</span>
+                    <span class="help-key">❌</span>
+                    <span class="help-desc">Bearish — All timeframes RSI &lt; 50</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-section-title">Tips</div>
+                <div style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.6;">
+                    • Click token name to open TradingView chart<br>
+                    • Click ⭐ to add/remove from watchlist<br>
+                    • Click column headers to sort<br>
+                    • Data auto-refreshes every 5 minutes<br>
+                    • Divergences must occur within 14 candles and in extreme zones (RSI &lt; 30 or &gt; 70)
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1523,21 +1714,45 @@
             }, 1000);
         }
 
+        // Help modal functions
+        function toggleHelp() {
+            const modal = document.getElementById('helpModal');
+            modal.classList.toggle('active');
+        }
+
+        function closeHelp(event) {
+            if (event.target.id === 'helpModal') {
+                document.getElementById('helpModal').classList.remove('active');
+            }
+        }
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             const searchInput = document.getElementById('searchInput');
+            const helpModal = document.getElementById('helpModal');
             const isTyping = document.activeElement === searchInput;
+            const isHelpOpen = helpModal.classList.contains('active');
 
-            // Allow Escape to work even when typing
+            // Allow Escape to close help modal or clear search
             if (e.key === 'Escape') {
-                searchInput.value = '';
-                searchInput.blur();
-                setFilter('all');
+                if (isHelpOpen) {
+                    helpModal.classList.remove('active');
+                } else {
+                    searchInput.value = '';
+                    searchInput.blur();
+                    setFilter('all');
+                }
                 return;
             }
 
-            // Don't trigger shortcuts when typing in search
-            if (isTyping) return;
+            // ? toggles help (works anytime except when typing)
+            if (e.key === '?' && !isTyping) {
+                toggleHelp();
+                return;
+            }
+
+            // Don't trigger other shortcuts when typing or help is open
+            if (isTyping || isHelpOpen) return;
 
             switch (e.key.toLowerCase()) {
                 case 'r':
