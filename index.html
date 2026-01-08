@@ -669,6 +669,12 @@
             color: var(--bg-primary);
         }
 
+        .filter-btn.div-filter.active {
+            background: var(--accent-purple);
+            border-color: var(--accent-purple);
+            color: var(--bg-primary);
+        }
+
         /* Empty State */
         .empty-state {
             display: none;
@@ -824,6 +830,7 @@
             <div class="filter-group">
                 <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
                 <button class="filter-btn starred-filter" data-filter="starred" onclick="setFilter('starred')">⭐ Starred</button>
+                <button class="filter-btn div-filter" data-filter="divergence" onclick="setFilter('divergence')">📊 Divergence</button>
                 <button class="filter-btn" data-filter="strong" onclick="setFilter('strong')">🔥 Strong</button>
                 <button class="filter-btn" data-filter="bullish" onclick="setFilter('bullish')">✅ Bullish</button>
                 <button class="filter-btn" data-filter="mixed" onclick="setFilter('mixed')">⚠️ Mixed</button>
@@ -1324,6 +1331,8 @@
                     matchesFilter = true;
                 } else if (currentFilter === 'starred') {
                     matchesFilter = starredTokens.has(item.symbol);
+                } else if (currentFilter === 'divergence') {
+                    matchesFilter = item.div4h || item.div1d || item.div1w;
                 } else {
                     matchesFilter = item.status === currentFilter;
                 }
