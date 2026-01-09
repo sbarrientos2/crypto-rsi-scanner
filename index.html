@@ -1509,11 +1509,10 @@
 
         // Binance API endpoints
         // Using CORS proxy to avoid browser blocking
-        const CORS_PROXY = 'https://corsproxy.io/?';
         const BINANCE_BASE = 'https://api.binance.com/api/v3';
 
         function buildApiUrl(endpoint) {
-            return CORS_PROXY + encodeURIComponent(BINANCE_BASE + endpoint);
+            return `https://api.allorigins.win/raw?url=${encodeURIComponent(BINANCE_BASE + endpoint)}`;
         }
 
         // RSI Calculation (Wilder's smoothing method)
