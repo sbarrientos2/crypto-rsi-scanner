@@ -409,7 +409,7 @@
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            overflow: hidden;
+            overflow-x: auto;
             box-shadow: 0 2px 8px var(--shadow-color);
         }
 
@@ -522,6 +522,9 @@
             user-select: none;
             transition: color 0.2s ease;
             white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
         .data-table th:hover {
