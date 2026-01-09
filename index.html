@@ -1753,11 +1753,6 @@
                     emptyState.classList.add('active');
                 }
 
-                // Start countdown AFTER scan completes
-                secondsUntilRefresh = 300;
-                updateCountdown();
-                startCountdown();
-
             } catch (error) {
                 console.error('Scan failed:', error);
                 loadingOverlay.classList.remove('active');
@@ -1771,14 +1766,13 @@
                     emptyState.textContent = 'Scan failed. Please try again.';
                     emptyState.classList.add('active');
                 }
-
-                // Start countdown even on error/partial data
+            } finally {
+                // Always start countdown after scan completes (success or failure)
                 secondsUntilRefresh = 300;
                 updateCountdown();
                 startCountdown();
+                refreshBtn.disabled = false;
             }
-
-            refreshBtn.disabled = false;
         }
 
         // Update statistics
