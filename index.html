@@ -1508,7 +1508,13 @@
         }
 
         // Binance API endpoints
-        const BINANCE_API = 'https://api.binance.com/api/v3';
+        // Using CORS proxy to avoid browser blocking
+        const CORS_PROXY = 'https://corsproxy.io/?';
+        const BINANCE_BASE = 'https://api.binance.com/api/v3';
+
+        function buildApiUrl(endpoint) {
+            return CORS_PROXY + encodeURIComponent(BINANCE_BASE + endpoint);
+        }
 
         // RSI Calculation (Wilder's smoothing method)
         function calculateRSI(closes, period = 14) {
@@ -1542,7 +1548,7 @@
         async function getKlines(symbol, interval, limit = 100) {
             try {
                 const response = await fetch(
-                    `${BINANCE_API}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
+                    buildApiUrl(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
                 );
                 if (!response.ok) return null;
                 const data = await response.json();
@@ -1698,7 +1704,7 @@
         // Get all USDT pairs
         async function getUSDTPairs() {
             try {
-                const response = await fetch(`${BINANCE_API}/exchangeInfo`);
+                const response = await fetch(buildApiUrl('/exchangeInfo'));
                 const data = await response.json();
                 return data.symbols
                     .filter(s =>
