@@ -1647,9 +1647,12 @@
             dataTable.classList.remove('active');
             emptyState.classList.remove('active');
 
-            // Reset countdown
-            secondsUntilRefresh = 300;
-            updateCountdown();
+            // Stop countdown during scan
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            document.getElementById('countdown').textContent = '—:——';
 
             try {
                 // Get all USDT pairs
@@ -1750,6 +1753,11 @@
                     emptyState.classList.add('active');
                 }
 
+                // Start countdown AFTER scan completes
+                secondsUntilRefresh = 300;
+                updateCountdown();
+                startCountdown();
+
             } catch (error) {
                 console.error('Scan failed:', error);
                 loadingOverlay.classList.remove('active');
@@ -1763,6 +1771,11 @@
                     emptyState.textContent = 'Scan failed. Please try again.';
                     emptyState.classList.add('active');
                 }
+
+                // Start countdown even on error/partial data
+                secondsUntilRefresh = 300;
+                updateCountdown();
+                startCountdown();
             }
 
             refreshBtn.disabled = false;
@@ -2091,7 +2104,7 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             startScan();
-            startCountdown();
+            // Countdown starts after scan completes, not here
         });
     </script>
 </body>
