@@ -409,8 +409,12 @@
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            overflow-x: auto;
             box-shadow: 0 2px 8px var(--shadow-color);
+        }
+
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
         /* Loading State */
@@ -1335,39 +1339,41 @@
                 No tokens match your filters.
             </div>
 
-            <table class="data-table" id="dataTable">
-                <thead>
-                    <tr>
-                        <th style="width: 50px; cursor: default;"></th>
-                        <th data-sort="symbol" onclick="sortTable('symbol')">
-                            Token <span class="sort-icon">↕</span>
-                        </th>
-                        <th data-sort="rsi4h" onclick="sortTable('rsi4h')">
-                            4H <span class="sort-icon">↕</span>
-                        </th>
-                        <th data-sort="rsi12h" onclick="sortTable('rsi12h')">
-                            12H <span class="sort-icon">↕</span>
-                        </th>
-                        <th data-sort="rsi1d" onclick="sortTable('rsi1d')">
-                            1D <span class="sort-icon">↕</span>
-                        </th>
-                        <th data-sort="rsi3d" onclick="sortTable('rsi3d')">
-                            3D <span class="sort-icon">↕</span>
-                        </th>
-                        <th data-sort="rsi1w" onclick="sortTable('rsi1w')">
-                            1W <span class="sort-icon">↕</span>
-                        </th>
-                        <th data-sort="rsi1M" onclick="sortTable('rsi1M')">
-                            1M <span class="sort-icon">↕</span>
-                        </th>
-                        <th data-sort="status" onclick="sortTable('status')">
-                            Status <span class="sort-icon">↕</span>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                </tbody>
-            </table>
+            <div class="table-scroll-wrapper">
+                <table class="data-table" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px; cursor: default;"></th>
+                            <th data-sort="symbol" onclick="sortTable('symbol')">
+                                Token <span class="sort-icon">↕</span>
+                            </th>
+                            <th data-sort="rsi4h" onclick="sortTable('rsi4h')">
+                                4H <span class="sort-icon">↕</span>
+                            </th>
+                            <th data-sort="rsi12h" onclick="sortTable('rsi12h')">
+                                12H <span class="sort-icon">↕</span>
+                            </th>
+                            <th data-sort="rsi1d" onclick="sortTable('rsi1d')">
+                                1D <span class="sort-icon">↕</span>
+                            </th>
+                            <th data-sort="rsi3d" onclick="sortTable('rsi3d')">
+                                3D <span class="sort-icon">↕</span>
+                            </th>
+                            <th data-sort="rsi1w" onclick="sortTable('rsi1w')">
+                                1W <span class="sort-icon">↕</span>
+                            </th>
+                            <th data-sort="rsi1M" onclick="sortTable('rsi1M')">
+                                1M <span class="sort-icon">↕</span>
+                            </th>
+                            <th data-sort="status" onclick="sortTable('status')">
+                                Status <span class="sort-icon">↕</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
