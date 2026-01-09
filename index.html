@@ -34,6 +34,38 @@
 
             --font-mono: 'JetBrains Mono', monospace;
             --font-sans: 'Space Grotesk', sans-serif;
+
+            --grid-opacity: 0.15;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+        }
+
+        /* Light Theme */
+        [data-theme="light"] {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f5f9;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            --border-glow: #0891b215;
+
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+
+            --accent-cyan: #0891b2;
+            --accent-cyan-glow: #0891b230;
+            --accent-green: #059669;
+            --accent-green-dim: #05966920;
+            --accent-red: #dc2626;
+            --accent-red-dim: #dc262620;
+            --accent-amber: #d97706;
+            --accent-amber-dim: #d9770620;
+            --accent-purple: #7c3aed;
+            --accent-gold: #ca8a04;
+            --accent-gold-dim: #ca8a0420;
+
+            --grid-opacity: 0.4;
+            --shadow-color: rgba(0, 0, 0, 0.08);
         }
 
         * {
@@ -62,7 +94,7 @@
                 linear-gradient(var(--border-color) 1px, transparent 1px),
                 linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
             background-size: 50px 50px;
-            opacity: 0.15;
+            opacity: var(--grid-opacity);
             pointer-events: none;
             z-index: 0;
         }
@@ -174,6 +206,74 @@
             cursor: not-allowed;
         }
 
+        /* Theme Toggle */
+        .theme-toggle {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2rem;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--accent-cyan);
+            background: var(--bg-secondary);
+        }
+
+        .theme-toggle .icon-sun,
+        .theme-toggle .icon-moon {
+            transition: opacity 0.2s ease, transform 0.3s ease;
+        }
+
+        /* Dark theme: show sun (to switch to light) */
+        .theme-toggle .icon-sun {
+            display: block;
+        }
+        .theme-toggle .icon-moon {
+            display: none;
+        }
+
+        /* Light theme: show moon (to switch to dark) */
+        [data-theme="light"] .theme-toggle .icon-sun {
+            display: none;
+        }
+        [data-theme="light"] .theme-toggle .icon-moon {
+            display: block;
+        }
+
+        /* Light theme specific adjustments */
+        [data-theme="light"] .logo h1 .icon {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            box-shadow: 0 2px 8px rgba(8, 145, 178, 0.3);
+        }
+
+        [data-theme="light"] .modal-overlay {
+            background: rgba(15, 23, 42, 0.6);
+        }
+
+        [data-theme="light"] .refresh-btn:hover {
+            box-shadow: 0 2px 12px var(--accent-cyan-glow);
+        }
+
+        [data-theme="light"] .scanner-center {
+            box-shadow: 0 0 20px var(--accent-cyan);
+        }
+
+        [data-theme="light"] .timer-value {
+            text-shadow: none;
+        }
+
+        [data-theme="light"] .star-btn.starred {
+            text-shadow: 0 0 8px var(--accent-gold-dim);
+        }
+
         /* Stats Bar */
         .stats-bar {
             display: flex;
@@ -193,6 +293,7 @@
             padding: 1rem 1.25rem;
             position: relative;
             overflow: hidden;
+            box-shadow: 0 1px 3px var(--shadow-color);
         }
 
         .stat-card::before {
@@ -309,6 +410,7 @@
             border: 1px solid var(--border-color);
             border-radius: 12px;
             overflow: hidden;
+            box-shadow: 0 2px 8px var(--shadow-color);
         }
 
         /* Loading State */
@@ -1105,6 +1207,11 @@
                 min-height: 44px;
             }
 
+            .theme-toggle {
+                min-width: 44px;
+                min-height: 44px;
+            }
+
             .star-btn {
                 min-width: 44px;
                 min-height: 44px;
@@ -1158,6 +1265,10 @@
                     <span class="timer-label">Next Refresh</span>
                     <span class="timer-value" id="countdown">5:00</span>
                 </div>
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                    <span class="icon-sun">☀️</span>
+                    <span class="icon-moon">🌙</span>
+                </button>
                 <button class="refresh-btn" id="refreshBtn" onclick="startScan()">
                     ↻ Refresh
                 </button>
@@ -1269,6 +1380,8 @@
                     <span class="help-desc">Refresh data</span>
                     <span class="help-key">/</span>
                     <span class="help-desc">Focus search box</span>
+                    <span class="help-key">T</span>
+                    <span class="help-desc">Toggle light/dark theme</span>
                     <span class="help-key">Esc</span>
                     <span class="help-desc">Clear search & reset filters</span>
                     <span class="help-key">?</span>
@@ -1346,6 +1459,27 @@
         let countdownInterval = null;
         let refreshInterval = null;
         let secondsUntilRefresh = 300; // 5 minutes
+
+        // Theme (persisted in localStorage)
+        const THEME_KEY = 'rsi-scanner-theme';
+        function initTheme() {
+            const savedTheme = localStorage.getItem(THEME_KEY);
+            if (savedTheme) {
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            }
+        }
+        initTheme(); // Run immediately to prevent flash
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            if (newTheme === 'dark') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', newTheme);
+            }
+            localStorage.setItem(THEME_KEY, newTheme);
+        }
 
         // Starred tokens (persisted in localStorage)
         const STORAGE_KEY = 'rsi-scanner-starred';
@@ -2077,6 +2211,9 @@
                 case '/':
                     e.preventDefault();
                     searchInput.focus();
+                    break;
+                case 't':
+                    toggleTheme();
                     break;
                 case 'a':
                     setFilter('all');
