@@ -941,7 +941,7 @@
             }
 
             .data-table {
-                min-width: 900px;
+                min-width: 1000px;
             }
 
             .modal {
@@ -1066,7 +1066,7 @@
 
             /* Table mobile styles */
             .data-table {
-                min-width: 800px;
+                min-width: 900px;
                 font-size: 0.75rem;
             }
 
@@ -1186,11 +1186,11 @@
             }
 
             .data-table {
-                min-width: 750px;
+                min-width: 850px;
             }
 
             .rsi-cell {
-                min-width: 50px;
+                min-width: 45px;
             }
         }
 
@@ -1353,6 +1353,9 @@
                         </th>
                         <th data-sort="rsi1w" onclick="sortTable('rsi1w')">
                             Weekly RSI <span class="sort-icon">↕</span>
+                        </th>
+                        <th data-sort="rsi1M" onclick="sortTable('rsi1M')">
+                            Monthly RSI <span class="sort-icon">↕</span>
                         </th>
                         <th data-sort="status" onclick="sortTable('status')">
                             Status <span class="sort-icon">↕</span>
@@ -1717,8 +1720,8 @@
         }
 
         // Determine status based on RSI values
-        function getStatus(rsi4h, rsi12h, rsi1d, rsi3d, rsi1w) {
-            const values = [rsi4h, rsi12h, rsi1d, rsi3d, rsi1w].filter(v => v !== null);
+        function getStatus(rsi4h, rsi12h, rsi1d, rsi3d, rsi1w, rsi1M) {
+            const values = [rsi4h, rsi12h, rsi1d, rsi3d, rsi1w, rsi1M].filter(v => v !== null);
             if (values.length === 0) return { status: 'unknown', priority: 0 };
 
             const allAbove60 = values.every(v => v > 60);
@@ -1803,12 +1806,13 @@
                     const batch = pairs.slice(i, i + batchSize);
 
                     const batchPromises = batch.map(async (pair) => {
-                        const [candles4h, candles12h, candles1d, candles3d, candles1w] = await Promise.all([
+                        const [candles4h, candles12h, candles1d, candles3d, candles1w, candles1M] = await Promise.all([
                             getKlines(pair.symbol, '4h', 100),
                             getKlines(pair.symbol, '12h', 100),
                             getKlines(pair.symbol, '1d', 100),
                             getKlines(pair.symbol, '3d', 100),
-                            getKlines(pair.symbol, '1w', 100)
+                            getKlines(pair.symbol, '1w', 100),
+                            getKlines(pair.symbol, '1M', 100)
                         ]);
 
                         // Extract close prices for RSI calculation
@@ -1817,12 +1821,14 @@
                         const closes1d = candles1d ? candles1d.map(c => c.close) : null;
                         const closes3d = candles3d ? candles3d.map(c => c.close) : null;
                         const closes1w = candles1w ? candles1w.map(c => c.close) : null;
+                        const closes1M = candles1M ? candles1M.map(c => c.close) : null;
 
                         const rsi4h = closes4h ? calculateRSI(closes4h) : null;
                         const rsi12h = closes12h ? calculateRSI(closes12h) : null;
                         const rsi1d = closes1d ? calculateRSI(closes1d) : null;
                         const rsi3d = closes3d ? calculateRSI(closes3d) : null;
                         const rsi1w = closes1w ? calculateRSI(closes1w) : null;
+                        const rsi1M = closes1M ? calculateRSI(closes1M) : null;
 
                         // Calculate RSI series and detect divergences
                         const rsiSeries4h = closes4h ? calculateRSISeries(closes4h) : [];
@@ -1830,14 +1836,16 @@
                         const rsiSeries1d = closes1d ? calculateRSISeries(closes1d) : [];
                         const rsiSeries3d = closes3d ? calculateRSISeries(closes3d) : [];
                         const rsiSeries1w = closes1w ? calculateRSISeries(closes1w) : [];
+                        const rsiSeries1M = closes1M ? calculateRSISeries(closes1M) : [];
 
                         const div4h = candles4h ? detectDivergence(candles4h, rsiSeries4h) : null;
                         const div12h = candles12h ? detectDivergence(candles12h, rsiSeries12h) : null;
                         const div1d = candles1d ? detectDivergence(candles1d, rsiSeries1d) : null;
                         const div3d = candles3d ? detectDivergence(candles3d, rsiSeries3d) : null;
                         const div1w = candles1w ? detectDivergence(candles1w, rsiSeries1w) : null;
+                        const div1M = candles1M ? detectDivergence(candles1M, rsiSeries1M) : null;
 
-                        const { status, priority } = getStatus(rsi4h, rsi12h, rsi1d, rsi3d, rsi1w);
+                        const { status, priority } = getStatus(rsi4h, rsi12h, rsi1d, rsi3d, rsi1w, rsi1M);
 
                         return {
                             symbol: pair.symbol,
@@ -1847,11 +1855,13 @@
                             rsi1d,
                             rsi3d,
                             rsi1w,
+                            rsi1M,
                             div4h,
                             div12h,
                             div1d,
                             div3d,
                             div1w,
+                            div1M,
                             status,
                             priority
                         };
@@ -1939,7 +1949,7 @@
                 } else if (currentFilter === 'starred') {
                     matchesFilter = starredTokens.has(item.symbol);
                 } else if (currentFilter === 'divergence') {
-                    matchesFilter = item.div4h || item.div12h || item.div1d || item.div3d || item.div1w;
+                    matchesFilter = item.div4h || item.div12h || item.div1d || item.div3d || item.div1w || item.div1M;
                 } else {
                     matchesFilter = item.status === currentFilter;
                 }
@@ -1982,6 +1992,10 @@
                     case 'rsi1w':
                         aVal = a.rsi1w ?? -1;
                         bVal = b.rsi1w ?? -1;
+                        break;
+                    case 'rsi1M':
+                        aVal = a.rsi1M ?? -1;
+                        bVal = b.rsi1M ?? -1;
                         break;
                     case 'status':
                         aVal = a.priority;
@@ -2083,6 +2097,15 @@
                             <div class="rsi-bar">
                                 <div class="rsi-bar-fill ${getRSIClass(item.rsi1w)}"
                                      style="width: ${item.rsi1w !== null ? item.rsi1w : 0}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="rsi-cell">
+                            <span class="rsi-value">${formatRSI(item.rsi1M)}${getRSIIndicator(item.rsi1M)}${getDivergenceIndicator(item.div1M)}</span>
+                            <div class="rsi-bar">
+                                <div class="rsi-bar-fill ${getRSIClass(item.rsi1M)}"
+                                     style="width: ${item.rsi1M !== null ? item.rsi1M : 0}%"></div>
                             </div>
                         </div>
                     </td>
