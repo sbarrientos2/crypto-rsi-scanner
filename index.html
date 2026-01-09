@@ -1366,9 +1366,8 @@
             }
             saveStarred();
 
-            // Update just the button without re-rendering entire table
-            const btn = event.target;
-            btn.classList.toggle('starred');
+            // Re-sort table so starred tokens move to top
+            applyFilterAndSort();
         }
 
         // Binance API endpoints
@@ -1813,8 +1812,16 @@
                 return matchesSearch && matchesFilter;
             });
 
-            // Sort
+            // Sort (starred tokens always first)
             filteredData.sort((a, b) => {
+                // Starred tokens always come first
+                const aStarred = starredTokens.has(a.symbol) ? 1 : 0;
+                const bStarred = starredTokens.has(b.symbol) ? 1 : 0;
+                if (aStarred !== bStarred) {
+                    return bStarred - aStarred; // Starred first
+                }
+
+                // Then sort by selected column
                 let aVal, bVal;
 
                 switch (currentSort.column) {
