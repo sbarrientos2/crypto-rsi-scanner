@@ -1490,6 +1490,7 @@
         let currentFilter = 'all';
         let currentSort = { column: 'status', direction: 'desc' };
         let countdownInterval = null;
+        let scanning = false;
         let secondsUntilRefresh = CONFIG.REFRESH_INTERVAL_S;
 
         // Theme (persisted in localStorage)
@@ -1853,6 +1854,9 @@
 
         // Main scan function
         async function startScan() {
+            if (scanning) return;
+            scanning = true;
+
             const refreshBtn = document.getElementById('refreshBtn');
             const loadingOverlay = document.getElementById('loadingOverlay');
             const dataTable = document.getElementById('dataTable');
@@ -1952,7 +1956,7 @@
                     emptyState.classList.add('active');
                 }
             } finally {
-                // Always start countdown after scan completes (success or failure)
+                scanning = false;
                 secondsUntilRefresh = CONFIG.REFRESH_INTERVAL_S;
                 updateCountdown();
                 startCountdown();
