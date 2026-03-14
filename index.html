@@ -2139,10 +2139,19 @@
             applyFilterAndSort();
         }
 
-        // Filter table (search)
-        function filterTable() {
-            applyFilterAndSort();
+        // Debounce utility
+        function debounce(fn, delay) {
+            let timer;
+            return function (...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
         }
+
+        // Filter table (search) — debounced to avoid excessive re-renders on every keystroke
+        const filterTable = debounce(() => {
+            applyFilterAndSort();
+        }, 200);
 
         // Update countdown display
         function updateCountdown() {
