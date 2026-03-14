@@ -1757,6 +1757,66 @@
             document.getElementById('progressFill').style.width = `${percent}%`;
         }
 
+        // Process a single trading pair: fetch candles, compute RSI, detect divergences
+        async function processPair(pair) {
+            const [candles4h, candles12h, candles1d, candles3d, candles1w, candles1M] = await Promise.all([
+                getKlines(pair.symbol, '4h', 100),
+                getKlines(pair.symbol, '12h', 100),
+                getKlines(pair.symbol, '1d', 100),
+                getKlines(pair.symbol, '3d', 100),
+                getKlines(pair.symbol, '1w', 100),
+                getKlines(pair.symbol, '1M', 100)
+            ]);
+
+            const timeframes = [
+                { candles: candles4h, key: '4h' },
+                { candles: candles12h, key: '12h' },
+                { candles: candles1d, key: '1d' },
+                { candles: candles3d, key: '3d' },
+                { candles: candles1w, key: '1w' },
+                { candles: candles1M, key: '1M' }
+            ];
+
+            const rsiResults = {};
+            const divResults = {};
+
+            for (const tf of timeframes) {
+                if (tf.candles) {
+                    const closes = tf.candles.map(c => c.close);
+                    const rsi = calculateRSI(closes);
+                    rsiResults[tf.key] = rsi.value;
+                    divResults[tf.key] = detectDivergence(tf.candles, rsi.series);
+                } else {
+                    rsiResults[tf.key] = null;
+                    divResults[tf.key] = null;
+                }
+            }
+
+            const { status, priority } = getStatus(
+                rsiResults['4h'], rsiResults['12h'], rsiResults['1d'],
+                rsiResults['3d'], rsiResults['1w'], rsiResults['1M']
+            );
+
+            return {
+                symbol: pair.symbol,
+                baseAsset: pair.baseAsset,
+                rsi4h: rsiResults['4h'],
+                rsi12h: rsiResults['12h'],
+                rsi1d: rsiResults['1d'],
+                rsi3d: rsiResults['3d'],
+                rsi1w: rsiResults['1w'],
+                rsi1M: rsiResults['1M'],
+                div4h: divResults['4h'],
+                div12h: divResults['12h'],
+                div1d: divResults['1d'],
+                div3d: divResults['3d'],
+                div1w: divResults['1w'],
+                div1M: divResults['1M'],
+                status,
+                priority
+            };
+        }
+
         // Main scan function
         async function startScan() {
             const refreshBtn = document.getElementById('refreshBtn');
@@ -1786,81 +1846,46 @@
                 }
 
                 allData = [];
-                const batchSize = 10; // Process in batches to avoid rate limits
+                const batchSize = 10;
+                const maxConcurrentBatches = 3;
+                let completedPairs = 0;
 
+                // Split pairs into batches
+                const batches = [];
                 for (let i = 0; i < pairs.length; i += batchSize) {
-                    const batch = pairs.slice(i, i + batchSize);
+                    batches.push(pairs.slice(i, i + batchSize));
+                }
 
-                    const batchPromises = batch.map(async (pair) => {
-                        const [candles4h, candles12h, candles1d, candles3d, candles1w, candles1M] = await Promise.all([
-                            getKlines(pair.symbol, '4h', 100),
-                            getKlines(pair.symbol, '12h', 100),
-                            getKlines(pair.symbol, '1d', 100),
-                            getKlines(pair.symbol, '3d', 100),
-                            getKlines(pair.symbol, '1w', 100),
-                            getKlines(pair.symbol, '1M', 100)
-                        ]);
+                // Process batches with controlled concurrency
+                // Runs up to maxConcurrentBatches in parallel for ~3x faster scanning
+                let batchIndex = 0;
 
-                        // Extract close prices for RSI calculation
-                        const closes4h = candles4h ? candles4h.map(c => c.close) : null;
-                        const closes12h = candles12h ? candles12h.map(c => c.close) : null;
-                        const closes1d = candles1d ? candles1d.map(c => c.close) : null;
-                        const closes3d = candles3d ? candles3d.map(c => c.close) : null;
-                        const closes1w = candles1w ? candles1w.map(c => c.close) : null;
-                        const closes1M = candles1M ? candles1M.map(c => c.close) : null;
+                async function processNextBatch() {
+                    while (batchIndex < batches.length) {
+                        const currentIndex = batchIndex++;
+                        const batch = batches[currentIndex];
 
-                        // Calculate RSI values and series in a single pass per timeframe
-                        const rsi4h = closes4h ? calculateRSI(closes4h) : { value: null, series: [] };
-                        const rsi12h = closes12h ? calculateRSI(closes12h) : { value: null, series: [] };
-                        const rsi1d = closes1d ? calculateRSI(closes1d) : { value: null, series: [] };
-                        const rsi3d = closes3d ? calculateRSI(closes3d) : { value: null, series: [] };
-                        const rsi1w = closes1w ? calculateRSI(closes1w) : { value: null, series: [] };
-                        const rsi1M = closes1M ? calculateRSI(closes1M) : { value: null, series: [] };
+                        const results = await Promise.all(batch.map(pair => processPair(pair)));
+                        allData.push(...results.filter(r => r.rsi4h !== null || r.rsi1d !== null || r.rsi1w !== null));
 
-                        // Detect divergences using the series from the unified RSI calculation
-                        const div4h = candles4h ? detectDivergence(candles4h, rsi4h.series) : null;
-                        const div12h = candles12h ? detectDivergence(candles12h, rsi12h.series) : null;
-                        const div1d = candles1d ? detectDivergence(candles1d, rsi1d.series) : null;
-                        const div3d = candles3d ? detectDivergence(candles3d, rsi3d.series) : null;
-                        const div1w = candles1w ? detectDivergence(candles1w, rsi1w.series) : null;
-                        const div1M = candles1M ? detectDivergence(candles1M, rsi1M.series) : null;
+                        completedPairs += batch.length;
+                        updateProgress(
+                            Math.min(completedPairs, pairs.length),
+                            pairs.length,
+                            `Scanning ${Math.min(completedPairs, pairs.length)} of ${pairs.length} pairs...`
+                        );
 
-                        const { status, priority } = getStatus(rsi4h.value, rsi12h.value, rsi1d.value, rsi3d.value, rsi1w.value, rsi1M.value);
-
-                        return {
-                            symbol: pair.symbol,
-                            baseAsset: pair.baseAsset,
-                            rsi4h: rsi4h.value,
-                            rsi12h: rsi12h.value,
-                            rsi1d: rsi1d.value,
-                            rsi3d: rsi3d.value,
-                            rsi1w: rsi1w.value,
-                            rsi1M: rsi1M.value,
-                            div4h,
-                            div12h,
-                            div1d,
-                            div3d,
-                            div1w,
-                            div1M,
-                            status,
-                            priority
-                        };
-                    });
-
-                    const results = await Promise.all(batchPromises);
-                    allData.push(...results.filter(r => r.rsi4h !== null || r.rsi1d !== null || r.rsi1w !== null));
-
-                    updateProgress(
-                        Math.min(i + batchSize, pairs.length),
-                        pairs.length,
-                        `Scanning ${Math.min(i + batchSize, pairs.length)} of ${pairs.length} pairs...`
-                    );
-
-                    // Small delay between batches to respect rate limits
-                    if (i + batchSize < pairs.length) {
+                        // Small delay between batches to respect rate limits
                         await new Promise(resolve => setTimeout(resolve, 100));
                     }
                 }
+
+                // Launch concurrent batch workers
+                const workers = [];
+                for (let w = 0; w < maxConcurrentBatches; w++) {
+                    workers.push(processNextBatch());
+                }
+                await Promise.all(workers);
 
                 // Update stats
                 updateStats();
