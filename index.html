@@ -1524,11 +1524,12 @@
         }
 
         // RSI Calculation (Wilder's smoothing method)
+        // Returns { value: number|null, series: number[] } to avoid duplicate computation
         function calculateRSI(closes, period = 14) {
-            if (closes.length < period + 1) return null;
+            if (closes.length < period + 1) return { value: null, series: [] };
 
-            let gains = [];
-            let losses = [];
+            const gains = [];
+            const losses = [];
 
             for (let i = 1; i < closes.length; i++) {
                 const change = closes[i] - closes[i - 1];
@@ -1540,15 +1541,19 @@
             let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
             let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
 
+            const series = [];
+            let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+            series.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + rs)));
+
             // Wilder's smoothing for remaining periods
             for (let i = period; i < gains.length; i++) {
                 avgGain = (avgGain * (period - 1) + gains[i]) / period;
                 avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
+                rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+                series.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + rs)));
             }
 
-            if (avgLoss === 0) return 100;
-            const rs = avgGain / avgLoss;
-            return 100 - (100 / (1 + rs));
+            return { value: series[series.length - 1], series };
         }
 
         // Get candle data from Binance (full OHLC)
@@ -1570,38 +1575,6 @@
             }
         }
 
-        // Calculate RSI series (RSI value for each candle)
-        function calculateRSISeries(closes, period = 14) {
-            if (closes.length < period + 1) return [];
-
-            const rsiSeries = [];
-            let gains = [];
-            let losses = [];
-
-            for (let i = 1; i < closes.length; i++) {
-                const change = closes[i] - closes[i - 1];
-                gains.push(change > 0 ? change : 0);
-                losses.push(change < 0 ? Math.abs(change) : 0);
-            }
-
-            // Initial averages
-            let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
-            let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
-
-            // First RSI value
-            let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-            rsiSeries.push(100 - (100 / (1 + rs)));
-
-            // Wilder's smoothing for remaining periods
-            for (let i = period; i < gains.length; i++) {
-                avgGain = (avgGain * (period - 1) + gains[i]) / period;
-                avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
-                rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-                rsiSeries.push(100 - (100 / (1 + rs)));
-            }
-
-            return rsiSeries;
-        }
 
         // Find swing lows in an array (for divergence detection)
         function findSwingLows(values, lookback = 2) {
@@ -1836,39 +1809,33 @@
                         const closes1w = candles1w ? candles1w.map(c => c.close) : null;
                         const closes1M = candles1M ? candles1M.map(c => c.close) : null;
 
-                        const rsi4h = closes4h ? calculateRSI(closes4h) : null;
-                        const rsi12h = closes12h ? calculateRSI(closes12h) : null;
-                        const rsi1d = closes1d ? calculateRSI(closes1d) : null;
-                        const rsi3d = closes3d ? calculateRSI(closes3d) : null;
-                        const rsi1w = closes1w ? calculateRSI(closes1w) : null;
-                        const rsi1M = closes1M ? calculateRSI(closes1M) : null;
+                        // Calculate RSI values and series in a single pass per timeframe
+                        const rsi4h = closes4h ? calculateRSI(closes4h) : { value: null, series: [] };
+                        const rsi12h = closes12h ? calculateRSI(closes12h) : { value: null, series: [] };
+                        const rsi1d = closes1d ? calculateRSI(closes1d) : { value: null, series: [] };
+                        const rsi3d = closes3d ? calculateRSI(closes3d) : { value: null, series: [] };
+                        const rsi1w = closes1w ? calculateRSI(closes1w) : { value: null, series: [] };
+                        const rsi1M = closes1M ? calculateRSI(closes1M) : { value: null, series: [] };
 
-                        // Calculate RSI series and detect divergences
-                        const rsiSeries4h = closes4h ? calculateRSISeries(closes4h) : [];
-                        const rsiSeries12h = closes12h ? calculateRSISeries(closes12h) : [];
-                        const rsiSeries1d = closes1d ? calculateRSISeries(closes1d) : [];
-                        const rsiSeries3d = closes3d ? calculateRSISeries(closes3d) : [];
-                        const rsiSeries1w = closes1w ? calculateRSISeries(closes1w) : [];
-                        const rsiSeries1M = closes1M ? calculateRSISeries(closes1M) : [];
+                        // Detect divergences using the series from the unified RSI calculation
+                        const div4h = candles4h ? detectDivergence(candles4h, rsi4h.series) : null;
+                        const div12h = candles12h ? detectDivergence(candles12h, rsi12h.series) : null;
+                        const div1d = candles1d ? detectDivergence(candles1d, rsi1d.series) : null;
+                        const div3d = candles3d ? detectDivergence(candles3d, rsi3d.series) : null;
+                        const div1w = candles1w ? detectDivergence(candles1w, rsi1w.series) : null;
+                        const div1M = candles1M ? detectDivergence(candles1M, rsi1M.series) : null;
 
-                        const div4h = candles4h ? detectDivergence(candles4h, rsiSeries4h) : null;
-                        const div12h = candles12h ? detectDivergence(candles12h, rsiSeries12h) : null;
-                        const div1d = candles1d ? detectDivergence(candles1d, rsiSeries1d) : null;
-                        const div3d = candles3d ? detectDivergence(candles3d, rsiSeries3d) : null;
-                        const div1w = candles1w ? detectDivergence(candles1w, rsiSeries1w) : null;
-                        const div1M = candles1M ? detectDivergence(candles1M, rsiSeries1M) : null;
-
-                        const { status, priority } = getStatus(rsi4h, rsi12h, rsi1d, rsi3d, rsi1w, rsi1M);
+                        const { status, priority } = getStatus(rsi4h.value, rsi12h.value, rsi1d.value, rsi3d.value, rsi1w.value, rsi1M.value);
 
                         return {
                             symbol: pair.symbol,
                             baseAsset: pair.baseAsset,
-                            rsi4h,
-                            rsi12h,
-                            rsi1d,
-                            rsi3d,
-                            rsi1w,
-                            rsi1M,
+                            rsi4h: rsi4h.value,
+                            rsi12h: rsi12h.value,
+                            rsi1d: rsi1d.value,
+                            rsi3d: rsi3d.value,
+                            rsi1w: rsi1w.value,
+                            rsi1M: rsi1M.value,
                             div4h,
                             div12h,
                             div1d,
