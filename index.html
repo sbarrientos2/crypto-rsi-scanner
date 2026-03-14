@@ -180,6 +180,12 @@
             text-shadow: 0 0 20px var(--accent-cyan-glow);
         }
 
+        .timer-value-sm {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            text-shadow: none;
+        }
+
         .refresh-btn {
             font-family: var(--font-mono);
             font-size: 0.85rem;
@@ -1190,6 +1196,10 @@
                 padding: 0.5rem;
             }
 
+            .last-updated-display {
+                display: none;
+            }
+
             .logo h1 {
                 font-size: 1.1rem;
             }
@@ -1278,6 +1288,10 @@
                 <span class="tagline">// Binance USDT Pairs • Multi-Timeframe Analysis</span>
             </div>
             <div class="header-controls">
+                <div class="timer-display last-updated-display">
+                    <span class="timer-label">Last Updated</span>
+                    <span class="timer-value timer-value-sm" id="lastUpdated">—</span>
+                </div>
                 <div class="timer-display">
                     <span class="timer-label">Next Refresh</span>
                     <span class="timer-value" id="countdown">5:00</span>
@@ -1975,6 +1989,11 @@
                 updateCountdown();
                 startCountdown();
                 refreshBtn.disabled = false;
+
+                // Show when data was last fetched
+                const now = new Date();
+                document.getElementById('lastUpdated').textContent =
+                    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             }
         }
 
