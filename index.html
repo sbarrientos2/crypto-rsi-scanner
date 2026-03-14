@@ -1469,7 +1469,6 @@
         let currentFilter = 'all';
         let currentSort = { column: 'status', direction: 'desc' };
         let countdownInterval = null;
-        let refreshInterval = null;
         let secondsUntilRefresh = 300; // 5 minutes
 
         // Theme (persisted in localStorage)
@@ -1523,60 +1522,19 @@
             return BINANCE_BASE + endpoint;
         }
 
+        // Cache for slow-moving timeframes (1W, 1M) that rarely change between refreshes.
+        // Keyed by "symbol:interval", stores { candles, timestamp }.
+        // Entries expire after 10 minutes to ensure data stays reasonably fresh.
+        const klinesCache = new Map();
+        const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
         // RSI Calculation (Wilder's smoothing method)
+        // Returns { value: number|null, series: number[] } to avoid duplicate computation
         function calculateRSI(closes, period = 14) {
-            if (closes.length < period + 1) return null;
+            if (closes.length < period + 1) return { value: null, series: [] };
 
-            let gains = [];
-            let losses = [];
-
-            for (let i = 1; i < closes.length; i++) {
-                const change = closes[i] - closes[i - 1];
-                gains.push(change > 0 ? change : 0);
-                losses.push(change < 0 ? Math.abs(change) : 0);
-            }
-
-            // Initial averages
-            let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
-            let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
-
-            // Wilder's smoothing for remaining periods
-            for (let i = period; i < gains.length; i++) {
-                avgGain = (avgGain * (period - 1) + gains[i]) / period;
-                avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
-            }
-
-            if (avgLoss === 0) return 100;
-            const rs = avgGain / avgLoss;
-            return 100 - (100 / (1 + rs));
-        }
-
-        // Get candle data from Binance (full OHLC)
-        async function getKlines(symbol, interval, limit = 100) {
-            try {
-                const response = await fetch(
-                    buildApiUrl(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
-                );
-                if (!response.ok) return null;
-                const data = await response.json();
-                return data.map(candle => ({
-                    open: parseFloat(candle[1]),
-                    high: parseFloat(candle[2]),
-                    low: parseFloat(candle[3]),
-                    close: parseFloat(candle[4])
-                }));
-            } catch (error) {
-                return null;
-            }
-        }
-
-        // Calculate RSI series (RSI value for each candle)
-        function calculateRSISeries(closes, period = 14) {
-            if (closes.length < period + 1) return [];
-
-            const rsiSeries = [];
-            let gains = [];
-            let losses = [];
+            const gains = [];
+            const losses = [];
 
             for (let i = 1; i < closes.length; i++) {
                 const change = closes[i] - closes[i - 1];
@@ -1588,20 +1546,61 @@
             let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
             let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
 
-            // First RSI value
+            const series = [];
             let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-            rsiSeries.push(100 - (100 / (1 + rs)));
+            series.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + rs)));
 
             // Wilder's smoothing for remaining periods
             for (let i = period; i < gains.length; i++) {
                 avgGain = (avgGain * (period - 1) + gains[i]) / period;
                 avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
                 rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-                rsiSeries.push(100 - (100 / (1 + rs)));
+                series.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + rs)));
             }
 
-            return rsiSeries;
+            return { value: series[series.length - 1], series };
         }
+
+        // Timeframes eligible for caching (slow-moving, rarely change)
+        const CACHEABLE_INTERVALS = new Set(['1w', '1M']);
+
+        // Get candle data from Binance (full OHLC)
+        // Slow timeframes (1W, 1M) are cached to reduce API calls on refresh
+        async function getKlines(symbol, interval, limit = 100) {
+            const cacheKey = `${symbol}:${interval}`;
+
+            // Return cached data if available and fresh
+            if (CACHEABLE_INTERVALS.has(interval)) {
+                const cached = klinesCache.get(cacheKey);
+                if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+                    return cached.candles;
+                }
+            }
+
+            try {
+                const response = await fetch(
+                    buildApiUrl(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
+                );
+                if (!response.ok) return null;
+                const data = await response.json();
+                const candles = data.map(candle => ({
+                    open: parseFloat(candle[1]),
+                    high: parseFloat(candle[2]),
+                    low: parseFloat(candle[3]),
+                    close: parseFloat(candle[4])
+                }));
+
+                // Cache slow timeframes
+                if (CACHEABLE_INTERVALS.has(interval)) {
+                    klinesCache.set(cacheKey, { candles, timestamp: Date.now() });
+                }
+
+                return candles;
+            } catch (error) {
+                return null;
+            }
+        }
+
 
         // Find swing lows in an array (for divergence detection)
         function findSwingLows(values, lookback = 2) {
@@ -1784,6 +1783,66 @@
             document.getElementById('progressFill').style.width = `${percent}%`;
         }
 
+        // Process a single trading pair: fetch candles, compute RSI, detect divergences
+        async function processPair(pair) {
+            const [candles4h, candles12h, candles1d, candles3d, candles1w, candles1M] = await Promise.all([
+                getKlines(pair.symbol, '4h', 100),
+                getKlines(pair.symbol, '12h', 100),
+                getKlines(pair.symbol, '1d', 100),
+                getKlines(pair.symbol, '3d', 100),
+                getKlines(pair.symbol, '1w', 100),
+                getKlines(pair.symbol, '1M', 100)
+            ]);
+
+            const timeframes = [
+                { candles: candles4h, key: '4h' },
+                { candles: candles12h, key: '12h' },
+                { candles: candles1d, key: '1d' },
+                { candles: candles3d, key: '3d' },
+                { candles: candles1w, key: '1w' },
+                { candles: candles1M, key: '1M' }
+            ];
+
+            const rsiResults = {};
+            const divResults = {};
+
+            for (const tf of timeframes) {
+                if (tf.candles) {
+                    const closes = tf.candles.map(c => c.close);
+                    const rsi = calculateRSI(closes);
+                    rsiResults[tf.key] = rsi.value;
+                    divResults[tf.key] = detectDivergence(tf.candles, rsi.series);
+                } else {
+                    rsiResults[tf.key] = null;
+                    divResults[tf.key] = null;
+                }
+            }
+
+            const { status, priority } = getStatus(
+                rsiResults['4h'], rsiResults['12h'], rsiResults['1d'],
+                rsiResults['3d'], rsiResults['1w'], rsiResults['1M']
+            );
+
+            return {
+                symbol: pair.symbol,
+                baseAsset: pair.baseAsset,
+                rsi4h: rsiResults['4h'],
+                rsi12h: rsiResults['12h'],
+                rsi1d: rsiResults['1d'],
+                rsi3d: rsiResults['3d'],
+                rsi1w: rsiResults['1w'],
+                rsi1M: rsiResults['1M'],
+                div4h: divResults['4h'],
+                div12h: divResults['12h'],
+                div1d: divResults['1d'],
+                div3d: divResults['3d'],
+                div1w: divResults['1w'],
+                div1M: divResults['1M'],
+                status,
+                priority
+            };
+        }
+
         // Main scan function
         async function startScan() {
             const refreshBtn = document.getElementById('refreshBtn');
@@ -1813,87 +1872,49 @@
                 }
 
                 allData = [];
-                const batchSize = 10; // Process in batches to avoid rate limits
+                const batchSize = 10;
+                const maxConcurrentBatches = 3;
+                let completedPairs = 0;
 
+                // Split pairs into batches
+                const batches = [];
                 for (let i = 0; i < pairs.length; i += batchSize) {
-                    const batch = pairs.slice(i, i + batchSize);
+                    batches.push(pairs.slice(i, i + batchSize));
+                }
 
-                    const batchPromises = batch.map(async (pair) => {
-                        const [candles4h, candles12h, candles1d, candles3d, candles1w, candles1M] = await Promise.all([
-                            getKlines(pair.symbol, '4h', 100),
-                            getKlines(pair.symbol, '12h', 100),
-                            getKlines(pair.symbol, '1d', 100),
-                            getKlines(pair.symbol, '3d', 100),
-                            getKlines(pair.symbol, '1w', 100),
-                            getKlines(pair.symbol, '1M', 100)
-                        ]);
+                // Process batches with controlled concurrency
+                // Runs up to maxConcurrentBatches in parallel for ~3x faster scanning
+                let batchIndex = 0;
 
-                        // Extract close prices for RSI calculation
-                        const closes4h = candles4h ? candles4h.map(c => c.close) : null;
-                        const closes12h = candles12h ? candles12h.map(c => c.close) : null;
-                        const closes1d = candles1d ? candles1d.map(c => c.close) : null;
-                        const closes3d = candles3d ? candles3d.map(c => c.close) : null;
-                        const closes1w = candles1w ? candles1w.map(c => c.close) : null;
-                        const closes1M = candles1M ? candles1M.map(c => c.close) : null;
+                async function processNextBatch() {
+                    while (batchIndex < batches.length) {
+                        const currentIndex = batchIndex++;
+                        const batch = batches[currentIndex];
 
-                        const rsi4h = closes4h ? calculateRSI(closes4h) : null;
-                        const rsi12h = closes12h ? calculateRSI(closes12h) : null;
-                        const rsi1d = closes1d ? calculateRSI(closes1d) : null;
-                        const rsi3d = closes3d ? calculateRSI(closes3d) : null;
-                        const rsi1w = closes1w ? calculateRSI(closes1w) : null;
-                        const rsi1M = closes1M ? calculateRSI(closes1M) : null;
+                        const settled = await Promise.allSettled(batch.map(pair => processPair(pair)));
+                        const results = settled
+                            .filter(r => r.status === 'fulfilled')
+                            .map(r => r.value);
+                        allData.push(...results.filter(r => r.rsi4h !== null || r.rsi1d !== null || r.rsi1w !== null));
 
-                        // Calculate RSI series and detect divergences
-                        const rsiSeries4h = closes4h ? calculateRSISeries(closes4h) : [];
-                        const rsiSeries12h = closes12h ? calculateRSISeries(closes12h) : [];
-                        const rsiSeries1d = closes1d ? calculateRSISeries(closes1d) : [];
-                        const rsiSeries3d = closes3d ? calculateRSISeries(closes3d) : [];
-                        const rsiSeries1w = closes1w ? calculateRSISeries(closes1w) : [];
-                        const rsiSeries1M = closes1M ? calculateRSISeries(closes1M) : [];
+                        completedPairs += batch.length;
+                        updateProgress(
+                            Math.min(completedPairs, pairs.length),
+                            pairs.length,
+                            `Scanning ${Math.min(completedPairs, pairs.length)} of ${pairs.length} pairs...`
+                        );
 
-                        const div4h = candles4h ? detectDivergence(candles4h, rsiSeries4h) : null;
-                        const div12h = candles12h ? detectDivergence(candles12h, rsiSeries12h) : null;
-                        const div1d = candles1d ? detectDivergence(candles1d, rsiSeries1d) : null;
-                        const div3d = candles3d ? detectDivergence(candles3d, rsiSeries3d) : null;
-                        const div1w = candles1w ? detectDivergence(candles1w, rsiSeries1w) : null;
-                        const div1M = candles1M ? detectDivergence(candles1M, rsiSeries1M) : null;
-
-                        const { status, priority } = getStatus(rsi4h, rsi12h, rsi1d, rsi3d, rsi1w, rsi1M);
-
-                        return {
-                            symbol: pair.symbol,
-                            baseAsset: pair.baseAsset,
-                            rsi4h,
-                            rsi12h,
-                            rsi1d,
-                            rsi3d,
-                            rsi1w,
-                            rsi1M,
-                            div4h,
-                            div12h,
-                            div1d,
-                            div3d,
-                            div1w,
-                            div1M,
-                            status,
-                            priority
-                        };
-                    });
-
-                    const results = await Promise.all(batchPromises);
-                    allData.push(...results.filter(r => r.rsi4h !== null || r.rsi1d !== null || r.rsi1w !== null));
-
-                    updateProgress(
-                        Math.min(i + batchSize, pairs.length),
-                        pairs.length,
-                        `Scanning ${Math.min(i + batchSize, pairs.length)} of ${pairs.length} pairs...`
-                    );
-
-                    // Small delay between batches to respect rate limits
-                    if (i + batchSize < pairs.length) {
+                        // Small delay between batches to respect rate limits
                         await new Promise(resolve => setTimeout(resolve, 100));
                     }
                 }
+
+                // Launch concurrent batch workers
+                const workers = [];
+                for (let w = 0; w < maxConcurrentBatches; w++) {
+                    workers.push(processNextBatch());
+                }
+                await Promise.all(workers);
 
                 // Update stats
                 updateStats();
@@ -2172,10 +2193,19 @@
             applyFilterAndSort();
         }
 
-        // Filter table (search)
-        function filterTable() {
-            applyFilterAndSort();
+        // Debounce utility
+        function debounce(fn, delay) {
+            let timer;
+            return function (...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
         }
+
+        // Filter table (search) — debounced to avoid excessive re-renders on every keystroke
+        const filterTable = debounce(() => {
+            applyFilterAndSort();
+        }, 200);
 
         // Update countdown display
         function updateCountdown() {
