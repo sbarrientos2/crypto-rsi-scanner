@@ -1892,7 +1892,10 @@
                         const currentIndex = batchIndex++;
                         const batch = batches[currentIndex];
 
-                        const results = await Promise.all(batch.map(pair => processPair(pair)));
+                        const settled = await Promise.allSettled(batch.map(pair => processPair(pair)));
+                        const results = settled
+                            .filter(r => r.status === 'fulfilled')
+                            .map(r => r.value);
                         allData.push(...results.filter(r => r.rsi4h !== null || r.rsi1d !== null || r.rsi1w !== null));
 
                         completedPairs += batch.length;
