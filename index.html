@@ -1523,6 +1523,12 @@
             return BINANCE_BASE + endpoint;
         }
 
+        // Cache for slow-moving timeframes (1W, 1M) that rarely change between refreshes.
+        // Keyed by "symbol:interval", stores { candles, timestamp }.
+        // Entries expire after 10 minutes to ensure data stays reasonably fresh.
+        const klinesCache = new Map();
+        const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
         // RSI Calculation (Wilder's smoothing method)
         // Returns { value: number|null, series: number[] } to avoid duplicate computation
         function calculateRSI(closes, period = 14) {
@@ -1556,20 +1562,41 @@
             return { value: series[series.length - 1], series };
         }
 
+        // Timeframes eligible for caching (slow-moving, rarely change)
+        const CACHEABLE_INTERVALS = new Set(['1w', '1M']);
+
         // Get candle data from Binance (full OHLC)
+        // Slow timeframes (1W, 1M) are cached to reduce API calls on refresh
         async function getKlines(symbol, interval, limit = 100) {
+            const cacheKey = `${symbol}:${interval}`;
+
+            // Return cached data if available and fresh
+            if (CACHEABLE_INTERVALS.has(interval)) {
+                const cached = klinesCache.get(cacheKey);
+                if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+                    return cached.candles;
+                }
+            }
+
             try {
                 const response = await fetch(
                     buildApiUrl(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
                 );
                 if (!response.ok) return null;
                 const data = await response.json();
-                return data.map(candle => ({
+                const candles = data.map(candle => ({
                     open: parseFloat(candle[1]),
                     high: parseFloat(candle[2]),
                     low: parseFloat(candle[3]),
                     close: parseFloat(candle[4])
                 }));
+
+                // Cache slow timeframes
+                if (CACHEABLE_INTERVALS.has(interval)) {
+                    klinesCache.set(cacheKey, { candles, timestamp: Date.now() });
+                }
+
+                return candles;
             } catch (error) {
                 return null;
             }
