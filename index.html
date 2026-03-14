@@ -1611,8 +1611,12 @@
                     close: parseFloat(candle[4])
                 }));
 
-                // Cache slow timeframes
+                // Cache slow timeframes with size limit to prevent unbounded growth
                 if (CACHEABLE_INTERVALS.has(interval)) {
+                    if (klinesCache.size >= CONFIG.MAX_CACHE_ENTRIES) {
+                        const oldestKey = klinesCache.keys().next().value;
+                        klinesCache.delete(oldestKey);
+                    }
                     klinesCache.set(cacheKey, { candles, timestamp: Date.now() });
                 }
 
