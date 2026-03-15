@@ -180,6 +180,12 @@
             text-shadow: 0 0 20px var(--accent-cyan-glow);
         }
 
+        .timer-value-sm {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            text-shadow: none;
+        }
+
         .refresh-btn {
             font-family: var(--font-mono);
             font-size: 0.85rem;
@@ -358,6 +364,16 @@
             outline: none;
             border-color: var(--accent-cyan);
             box-shadow: 0 0 0 3px var(--accent-cyan-glow);
+        }
+
+        /* Keyboard focus indicators for accessibility */
+        .refresh-btn:focus-visible,
+        .theme-toggle:focus-visible,
+        .filter-btn:focus-visible,
+        .star-btn:focus-visible,
+        .data-table th:focus-visible {
+            outline: 2px solid var(--accent-cyan);
+            outline-offset: 2px;
         }
 
         .search-box input::placeholder {
@@ -1180,6 +1196,10 @@
                 padding: 0.5rem;
             }
 
+            .last-updated-display {
+                display: none;
+            }
+
             .logo h1 {
                 font-size: 1.1rem;
             }
@@ -1268,6 +1288,10 @@
                 <span class="tagline">// Binance USDT Pairs • Multi-Timeframe Analysis</span>
             </div>
             <div class="header-controls">
+                <div class="timer-display last-updated-display">
+                    <span class="timer-label">Last Updated</span>
+                    <span class="timer-value timer-value-sm" id="lastUpdated">—</span>
+                </div>
                 <div class="timer-display">
                     <span class="timer-label">Next Refresh</span>
                     <span class="timer-value" id="countdown">5:00</span>
@@ -1463,13 +1487,35 @@
     </div>
 
     <script>
+        // Configuration — all tunable values in one place
+        const CONFIG = {
+            RSI_PERIOD: 14,
+            KLINES_LIMIT: 35,
+            BATCH_SIZE: 10,
+            MAX_CONCURRENT_BATCHES: 3,
+            BATCH_DELAY_MS: 100,
+            REFRESH_INTERVAL_S: 300,
+            CACHE_TTL_MS: 10 * 60 * 1000,
+            MAX_CACHE_ENTRIES: 2500,
+            SEARCH_DEBOUNCE_MS: 200,
+            OB_THRESHOLD: 70,
+            OS_THRESHOLD: 30,
+            STRONG_THRESHOLD: 60,
+            BULLISH_THRESHOLD: 50,
+            DIVERGENCE_WINDOW: 14,
+            DIVERGENCE_BUFFER: 4,
+            SWING_LOOKBACK: 2,
+            MIN_SWING_DISTANCE: 3,
+        };
+
         // State
         let allData = [];
         let filteredData = [];
         let currentFilter = 'all';
         let currentSort = { column: 'status', direction: 'desc' };
         let countdownInterval = null;
-        let secondsUntilRefresh = 300; // 5 minutes
+        let scanning = false;
+        let secondsUntilRefresh = CONFIG.REFRESH_INTERVAL_S;
 
         // Theme (persisted in localStorage)
         const THEME_KEY = 'rsi-scanner-theme';
@@ -1526,11 +1572,10 @@
         // Keyed by "symbol:interval", stores { candles, timestamp }.
         // Entries expire after 10 minutes to ensure data stays reasonably fresh.
         const klinesCache = new Map();
-        const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
         // RSI Calculation (Wilder's smoothing method)
         // Returns { value: number|null, series: number[] } to avoid duplicate computation
-        function calculateRSI(closes, period = 14) {
+        function calculateRSI(closes, period = CONFIG.RSI_PERIOD) {
             if (closes.length < period + 1) return { value: null, series: [] };
 
             const gains = [];
@@ -1566,13 +1611,13 @@
 
         // Get candle data from Binance (full OHLC)
         // Slow timeframes (1W, 1M) are cached to reduce API calls on refresh
-        async function getKlines(symbol, interval, limit = 100) {
+        async function getKlines(symbol, interval, limit = CONFIG.KLINES_LIMIT) {
             const cacheKey = `${symbol}:${interval}`;
 
             // Return cached data if available and fresh
             if (CACHEABLE_INTERVALS.has(interval)) {
                 const cached = klinesCache.get(cacheKey);
-                if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+                if (cached && (Date.now() - cached.timestamp) < CONFIG.CACHE_TTL_MS) {
                     return cached.candles;
                 }
             }
@@ -1590,8 +1635,12 @@
                     close: parseFloat(candle[4])
                 }));
 
-                // Cache slow timeframes
+                // Cache slow timeframes with size limit to prevent unbounded growth
                 if (CACHEABLE_INTERVALS.has(interval)) {
+                    if (klinesCache.size >= CONFIG.MAX_CACHE_ENTRIES) {
+                        const oldestKey = klinesCache.keys().next().value;
+                        klinesCache.delete(oldestKey);
+                    }
                     klinesCache.set(cacheKey, { candles, timestamp: Date.now() });
                 }
 
@@ -1603,7 +1652,7 @@
 
 
         // Find swing lows in an array (for divergence detection)
-        function findSwingLows(values, lookback = 2) {
+        function findSwingLows(values, lookback = CONFIG.SWING_LOOKBACK) {
             const swings = [];
             for (let i = lookback; i < values.length - lookback; i++) {
                 let isSwingLow = true;
@@ -1621,7 +1670,7 @@
         }
 
         // Find swing highs in an array (for divergence detection)
-        function findSwingHighs(values, lookback = 2) {
+        function findSwingHighs(values, lookback = CONFIG.SWING_LOOKBACK) {
             const swings = [];
             for (let i = lookback; i < values.length - lookback; i++) {
                 let isSwingHigh = true;
@@ -1638,67 +1687,55 @@
             return swings;
         }
 
-        // Detect divergence within last 14 candles
+        // Detect divergence within the recent candle window
         function detectDivergence(candles, rsiSeries) {
-            if (!candles || !rsiSeries || rsiSeries.length < 14) return null;
+            if (!candles || !rsiSeries || rsiSeries.length < CONFIG.DIVERGENCE_WINDOW) return null;
 
-            // We only look at the last 14 candles + some buffer for RSI calculation
-            // Align RSI series with candles (RSI series starts after 'period' candles)
-            const offset = candles.length - rsiSeries.length;
-            const windowSize = 14;
+            const lookback = CONFIG.DIVERGENCE_WINDOW + CONFIG.DIVERGENCE_BUFFER;
 
-            // Get the last 14+buffer candles for analysis
-            const recentCandles = candles.slice(-windowSize - 4);
-            const recentRSI = rsiSeries.slice(-windowSize - 4);
+            const recentCandles = candles.slice(-lookback);
+            const recentRSI = rsiSeries.slice(-lookback);
 
             if (recentCandles.length < 10 || recentRSI.length < 10) return null;
 
-            // Use Close prices for divergence calculation (not High/Low)
             const priceCloses = recentCandles.map(c => c.close);
 
-            // Find swing points using Close prices
-            const priceSwingLows = findSwingLows(priceCloses, 2);
-            const priceSwingHighs = findSwingHighs(priceCloses, 2);
-            const rsiSwingLows = findSwingLows(recentRSI, 2);
-            const rsiSwingHighs = findSwingHighs(recentRSI, 2);
+            const priceSwingLows = findSwingLows(priceCloses);
+            const priceSwingHighs = findSwingHighs(priceCloses);
+            const rsiSwingLows = findSwingLows(recentRSI);
+            const rsiSwingHighs = findSwingHighs(recentRSI);
 
             // Check for Bullish Divergence:
-            // Price: Low -> Higher Low (price rising)
-            // RSI: Low -> Lower Low (RSI falling)
-            // MUST be in oversold zone (RSI < 30) to be valid
+            // Price makes higher low while RSI makes lower low in oversold zone
             if (priceSwingLows.length >= 2 && rsiSwingLows.length >= 2) {
                 const [priceLow1, priceLow2] = priceSwingLows.slice(-2);
                 const [rsiLow1, rsiLow2] = rsiSwingLows.slice(-2);
 
-                // Check if within 14 candles of each other
                 const priceDistance = priceLow2.index - priceLow1.index;
                 const rsiDistance = rsiLow2.index - rsiLow1.index;
 
-                if (priceDistance <= 14 && priceDistance >= 3 && rsiDistance <= 14 && rsiDistance >= 3) {
-                    // Bullish: Price makes higher low, RSI makes lower low
-                    // Only valid if RSI is in oversold territory (< 30)
-                    if (priceLow2.value > priceLow1.value && rsiLow2.value < rsiLow1.value && rsiLow2.value < 30) {
+                if (priceDistance <= CONFIG.DIVERGENCE_WINDOW && priceDistance >= CONFIG.MIN_SWING_DISTANCE &&
+                    rsiDistance <= CONFIG.DIVERGENCE_WINDOW && rsiDistance >= CONFIG.MIN_SWING_DISTANCE) {
+                    if (priceLow2.value > priceLow1.value && rsiLow2.value < rsiLow1.value &&
+                        rsiLow2.value < CONFIG.OS_THRESHOLD) {
                         return 'bullish';
                     }
                 }
             }
 
             // Check for Bearish Divergence:
-            // Price: High -> Higher High (price rising)
-            // RSI: High -> Lower High (RSI falling)
-            // MUST be in overbought zone (RSI > 70) to be valid
+            // Price makes higher high while RSI makes lower high in overbought zone
             if (priceSwingHighs.length >= 2 && rsiSwingHighs.length >= 2) {
                 const [priceHigh1, priceHigh2] = priceSwingHighs.slice(-2);
                 const [rsiHigh1, rsiHigh2] = rsiSwingHighs.slice(-2);
 
-                // Check if within 14 candles of each other
                 const priceDistance = priceHigh2.index - priceHigh1.index;
                 const rsiDistance = rsiHigh2.index - rsiHigh1.index;
 
-                if (priceDistance <= 14 && priceDistance >= 3 && rsiDistance <= 14 && rsiDistance >= 3) {
-                    // Bearish: Price makes higher high, RSI makes lower high
-                    // Only valid if RSI is in overbought territory (> 70)
-                    if (priceHigh2.value > priceHigh1.value && rsiHigh2.value < rsiHigh1.value && rsiHigh2.value > 70) {
+                if (priceDistance <= CONFIG.DIVERGENCE_WINDOW && priceDistance >= CONFIG.MIN_SWING_DISTANCE &&
+                    rsiDistance <= CONFIG.DIVERGENCE_WINDOW && rsiDistance >= CONFIG.MIN_SWING_DISTANCE) {
+                    if (priceHigh2.value > priceHigh1.value && rsiHigh2.value < rsiHigh1.value &&
+                        rsiHigh2.value > CONFIG.OB_THRESHOLD) {
                         return 'bearish';
                     }
                 }
@@ -1736,9 +1773,9 @@
             const values = [rsi4h, rsi12h, rsi1d, rsi3d, rsi1w, rsi1M].filter(v => v !== null);
             if (values.length === 0) return { status: 'unknown', priority: 0 };
 
-            const allAbove60 = values.every(v => v > 60);
-            const allAbove50 = values.every(v => v > 50);
-            const allBelow50 = values.every(v => v < 50);
+            const allAbove60 = values.every(v => v > CONFIG.STRONG_THRESHOLD);
+            const allAbove50 = values.every(v => v > CONFIG.BULLISH_THRESHOLD);
+            const allBelow50 = values.every(v => v < CONFIG.BULLISH_THRESHOLD);
 
             if (allAbove60) return { status: 'strong', priority: 4 };
             if (allAbove50) return { status: 'bullish', priority: 3 };
@@ -1749,9 +1786,9 @@
         // Get RSI class for styling
         function getRSIClass(value) {
             if (value === null) return 'neutral';
-            if (value > 60) return 'strong';
-            if (value > 50) return 'bullish';
-            if (value < 40) return 'bearish';
+            if (value > CONFIG.STRONG_THRESHOLD) return 'strong';
+            if (value > CONFIG.BULLISH_THRESHOLD) return 'bullish';
+            if (value < CONFIG.BULLISH_THRESHOLD - 10) return 'bearish';
             return 'neutral';
         }
 
@@ -1763,8 +1800,8 @@
         // Get overbought/oversold indicator
         function getRSIIndicator(value) {
             if (value === null) return '';
-            if (value >= 70) return '<span class="rsi-indicator overbought">OB</span>';
-            if (value <= 30) return '<span class="rsi-indicator oversold">OS</span>';
+            if (value >= CONFIG.OB_THRESHOLD) return '<span class="rsi-indicator overbought">OB</span>';
+            if (value <= CONFIG.OS_THRESHOLD) return '<span class="rsi-indicator oversold">OS</span>';
             return '';
         }
 
@@ -1786,12 +1823,12 @@
         // Process a single trading pair: fetch candles, compute RSI, detect divergences
         async function processPair(pair) {
             const [candles4h, candles12h, candles1d, candles3d, candles1w, candles1M] = await Promise.all([
-                getKlines(pair.symbol, '4h', 100),
-                getKlines(pair.symbol, '12h', 100),
-                getKlines(pair.symbol, '1d', 100),
-                getKlines(pair.symbol, '3d', 100),
-                getKlines(pair.symbol, '1w', 100),
-                getKlines(pair.symbol, '1M', 100)
+                getKlines(pair.symbol, '4h', CONFIG.KLINES_LIMIT),
+                getKlines(pair.symbol, '12h', CONFIG.KLINES_LIMIT),
+                getKlines(pair.symbol, '1d', CONFIG.KLINES_LIMIT),
+                getKlines(pair.symbol, '3d', CONFIG.KLINES_LIMIT),
+                getKlines(pair.symbol, '1w', CONFIG.KLINES_LIMIT),
+                getKlines(pair.symbol, '1M', CONFIG.KLINES_LIMIT)
             ]);
 
             const timeframes = [
@@ -1845,6 +1882,9 @@
 
         // Main scan function
         async function startScan() {
+            if (scanning) return;
+            scanning = true;
+
             const refreshBtn = document.getElementById('refreshBtn');
             const loadingOverlay = document.getElementById('loadingOverlay');
             const dataTable = document.getElementById('dataTable');
@@ -1872,8 +1912,8 @@
                 }
 
                 allData = [];
-                const batchSize = 10;
-                const maxConcurrentBatches = 3;
+                const batchSize = CONFIG.BATCH_SIZE;
+                const maxConcurrentBatches = CONFIG.MAX_CONCURRENT_BATCHES;
                 let completedPairs = 0;
 
                 // Split pairs into batches
@@ -1905,7 +1945,7 @@
                         );
 
                         // Small delay between batches to respect rate limits
-                        await new Promise(resolve => setTimeout(resolve, 100));
+                        await new Promise(resolve => setTimeout(resolve, CONFIG.BATCH_DELAY_MS));
                     }
                 }
 
@@ -1944,11 +1984,16 @@
                     emptyState.classList.add('active');
                 }
             } finally {
-                // Always start countdown after scan completes (success or failure)
-                secondsUntilRefresh = 300;
+                scanning = false;
+                secondsUntilRefresh = CONFIG.REFRESH_INTERVAL_S;
                 updateCountdown();
                 startCountdown();
                 refreshBtn.disabled = false;
+
+                // Show when data was last fetched
+                const now = new Date();
+                document.getElementById('lastUpdated').textContent =
+                    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             }
         }
 
@@ -2205,7 +2250,7 @@
         // Filter table (search) — debounced to avoid excessive re-renders on every keystroke
         const filterTable = debounce(() => {
             applyFilterAndSort();
-        }, 200);
+        }, CONFIG.SEARCH_DEBOUNCE_MS);
 
         // Update countdown display
         function updateCountdown() {
