@@ -1565,6 +1565,7 @@
             BATCH_SIZE: 10,
             MAX_CONCURRENT_BATCHES: 3,
             BATCH_DELAY_MS: 100,
+            FETCH_TIMEOUT_MS: 15000,
             REFRESH_INTERVAL_S: 300,
             CACHE_TTL_MS: 10 * 60 * 1000,
             MAX_CACHE_ENTRIES: 2500,
@@ -1695,7 +1696,8 @@
 
             try {
                 const response = await fetch(
-                    buildApiUrl(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
+                    buildApiUrl(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`),
+                    { signal: AbortSignal.timeout(CONFIG.FETCH_TIMEOUT_MS) }
                 );
                 if (!response.ok) return null;
                 const data = await response.json();
@@ -1818,7 +1820,11 @@
         // Get all USDT pairs
         async function getUSDTPairs() {
             try {
-                const response = await fetch(buildApiUrl('/exchangeInfo'));
+                const response = await fetch(
+                    buildApiUrl('/exchangeInfo'),
+                    { signal: AbortSignal.timeout(CONFIG.FETCH_TIMEOUT_MS) }
+                );
+                if (!response.ok) return [];
                 const data = await response.json();
                 return data.symbols
                     .filter(s =>
@@ -1889,6 +1895,13 @@
             const percent = Math.round((current / total) * 100);
             document.getElementById('loadingProgress').textContent = message;
             document.getElementById('progressFill').style.width = `${percent}%`;
+            // Agent-visible progress: body attrs + JSON-view status line
+            document.body.setAttribute('data-scan-progress', `${current}/${total}`);
+            document.body.setAttribute('data-scan-progress-message', message);
+            if (document.body.getAttribute('data-view') === 'json') {
+                const status = document.getElementById('json-view-status');
+                if (status) status.textContent = `state=loading • ${percent}% • ${message}`;
+            }
         }
 
         // Process a single trading pair: fetch candles, compute RSI, detect divergences
