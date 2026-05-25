@@ -1275,9 +1275,73 @@
         .data-table tbody tr:nth-child(4) { animation-delay: 0.08s; }
         .data-table tbody tr:nth-child(5) { animation-delay: 0.1s; }
         .data-table tbody tr:nth-child(n+6) { animation-delay: 0.12s; }
+
+        /* Agent integration: ?view=json renders only the JSON payload */
+        body[data-view="json"] .container { display: none !important; }
+        body[data-view="json"] #json-view {
+            display: block;
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        body[data-view="json"] #json-view-status {
+            display: block;
+            padding: 0.5rem 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        #json-view, #json-view-status { display: none; }
+
+        /* Copy-JSON button */
+        .copy-json-btn {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+        .copy-json-btn:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+        .copy-json-btn.copied {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        /* Last-updated chip */
+        .last-updated {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+        .last-updated .lu-label {
+            text-transform: uppercase;
+            margin-right: 0.4rem;
+        }
+        .last-updated .lu-value {
+            color: var(--text-secondary);
+        }
     </style>
 </head>
-<body>
+<body data-scan-state="loading" data-last-updated="">
+    <div id="json-view-status"></div>
+    <pre id="json-view"></pre>
     <div class="container">
         <header>
             <div class="logo">
@@ -1341,6 +1405,13 @@
                 <button class="filter-btn" data-filter="bullish" onclick="setFilter('bullish')">✅ Bullish</button>
                 <button class="filter-btn" data-filter="mixed" onclick="setFilter('mixed')">⚠️ Mixed</button>
                 <button class="filter-btn" data-filter="bearish" onclick="setFilter('bearish')">❌ Bearish</button>
+            </div>
+            <button class="copy-json-btn" id="copyJsonBtn" onclick="copyScannerJSON()" title="Copy current scan data as JSON">
+                ⧉ Copy JSON
+            </button>
+            <div class="last-updated">
+                <span class="lu-label">Last updated</span>
+                <span class="lu-value" id="last-updated">—</span>
             </div>
         </div>
 
@@ -1894,6 +1965,7 @@
             loadingOverlay.classList.add('active');
             dataTable.classList.remove('active');
             emptyState.classList.remove('active');
+            setScanState('loading');
 
             // Stop countdown during scan
             if (countdownInterval) {
@@ -1962,6 +2034,9 @@
                 // Apply current filter and sort
                 applyFilterAndSort();
 
+                // Publish machine-readable payload + state
+                publishScannerData(allData.length > 0 ? 'ready' : 'empty');
+
                 // Show table
                 loadingOverlay.classList.remove('active');
                 if (filteredData.length > 0) {
@@ -1978,10 +2053,12 @@
                 if (allData.length > 0) {
                     updateStats();
                     applyFilterAndSort();
+                    publishScannerData('ready', error.message);
                     dataTable.classList.add('active');
                 } else {
                     emptyState.textContent = 'Scan failed. Please try again.';
                     emptyState.classList.add('active');
+                    publishScannerData('error', error.message);
                 }
             } finally {
                 scanning = false;
@@ -2012,6 +2089,107 @@
             document.getElementById('statBullish').textContent = stats.bullish;
             document.getElementById('statMixed').textContent = stats.mixed;
             document.getElementById('statBearish').textContent = stats.bearish;
+        }
+
+        // Set machine-readable scan state on <body> (agent-friendly signal)
+        function setScanState(state) {
+            document.body.setAttribute('data-scan-state', state);
+        }
+
+        // Build the canonical JSON payload the agent (or anyone) consumes
+        function buildScannerPayload(state, errorMessage) {
+            const ts = new Date().toISOString();
+            const tokens = allData.map(d => ({
+                symbol: d.symbol,
+                base_asset: d.baseAsset,
+                pair: d.symbol,
+                status: d.status,
+                rsi: {
+                    '4h':  d.rsi4h,
+                    '12h': d.rsi12h,
+                    '1d':  d.rsi1d,
+                    '3d':  d.rsi3d,
+                    '1w':  d.rsi1w,
+                    '1M':  d.rsi1M
+                },
+                divergences: {
+                    '4h':  d.div4h,
+                    '12h': d.div12h,
+                    '1d':  d.div1d,
+                    '3d':  d.div3d,
+                    '1w':  d.div1w,
+                    '1M':  d.div1M
+                }
+            }));
+            const byStatus = s => tokens
+                .filter(t => t.status === s)
+                .map(t => ({ symbol: t.base_asset, pair: t.pair }));
+            return {
+                version: 1,
+                state,
+                last_updated: state === 'ready' || state === 'empty' ? ts : null,
+                error: errorMessage || null,
+                counts: {
+                    total:   tokens.length,
+                    strong:  tokens.filter(t => t.status === 'strong').length,
+                    bullish: tokens.filter(t => t.status === 'bullish').length,
+                    mixed:   tokens.filter(t => t.status === 'mixed').length,
+                    bearish: tokens.filter(t => t.status === 'bearish').length
+                },
+                categories: {
+                    strong:  byStatus('strong'),
+                    bullish: byStatus('bullish'),
+                    mixed:   byStatus('mixed'),
+                    bearish: byStatus('bearish')
+                },
+                tokens
+            };
+        }
+
+        // Write payload into the page (script tag, body attrs, visible chip, ?view=json output)
+        function publishScannerData(state, errorMessage) {
+            const payload = buildScannerPayload(state, errorMessage);
+            const json = JSON.stringify(payload);
+            const blob = document.getElementById('scanner-data');
+            if (blob) blob.textContent = json;
+            setScanState(state);
+            if (payload.last_updated) {
+                document.body.setAttribute('data-last-updated', payload.last_updated);
+                const lu = document.getElementById('last-updated');
+                if (lu) {
+                    const d = new Date(payload.last_updated);
+                    lu.textContent = d.toLocaleTimeString([], { hour12: false });
+                    lu.setAttribute('title', payload.last_updated);
+                }
+            }
+            // ?view=json mode: render pretty JSON for direct viewing
+            if (document.body.getAttribute('data-view') === 'json') {
+                const out = document.getElementById('json-view');
+                if (out) out.textContent = JSON.stringify(payload, null, 2);
+                const status = document.getElementById('json-view-status');
+                if (status) {
+                    status.textContent = `state=${state} • last_updated=${payload.last_updated || '—'} • total=${payload.counts.total}`;
+                }
+            }
+        }
+
+        // Copy current scanner JSON to clipboard
+        async function copyScannerJSON() {
+            const blob = document.getElementById('scanner-data');
+            const btn = document.getElementById('copyJsonBtn');
+            if (!blob || !btn) return;
+            try {
+                await navigator.clipboard.writeText(blob.textContent);
+                const orig = btn.textContent;
+                btn.classList.add('copied');
+                btn.textContent = '✓ Copied';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.textContent = orig;
+                }, 1200);
+            } catch (e) {
+                console.error('Copy failed:', e);
+            }
         }
 
         // Apply filter and sort
@@ -2111,8 +2289,23 @@
             emptyState.classList.remove('active');
             dataTable.classList.add('active');
 
+            const attr = v => (v === null || v === undefined) ? '' : v;
             tbody.innerHTML = filteredData.map(item => `
-                <tr data-status="${item.status}">
+                <tr data-status="${item.status}"
+                    data-symbol="${item.symbol}"
+                    data-base-asset="${item.baseAsset}"
+                    data-rsi-4h="${attr(item.rsi4h)}"
+                    data-rsi-12h="${attr(item.rsi12h)}"
+                    data-rsi-1d="${attr(item.rsi1d)}"
+                    data-rsi-3d="${attr(item.rsi3d)}"
+                    data-rsi-1w="${attr(item.rsi1w)}"
+                    data-rsi-1m="${attr(item.rsi1M)}"
+                    data-div-4h="${attr(item.div4h)}"
+                    data-div-12h="${attr(item.div12h)}"
+                    data-div-1d="${attr(item.div1d)}"
+                    data-div-3d="${attr(item.div3d)}"
+                    data-div-1w="${attr(item.div1w)}"
+                    data-div-1m="${attr(item.div1M)}">
                     <td>
                         <button class="star-btn ${starredTokens.has(item.symbol) ? 'starred' : ''}"
                                 onclick="toggleStar('${item.symbol}', event)"
@@ -2352,9 +2545,19 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            // Agent-friendly raw-JSON view: ?view=json
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('view') === 'json') {
+                document.body.setAttribute('data-view', 'json');
+                const status = document.getElementById('json-view-status');
+                if (status) status.textContent = 'state=loading • scanning…';
+                const out = document.getElementById('json-view');
+                if (out) out.textContent = '';
+            }
             startScan();
             // Countdown starts after scan completes, not here
         });
     </script>
+    <script type="application/json" id="scanner-data">{"version":1,"state":"loading","last_updated":null,"counts":{"total":0,"strong":0,"bullish":0,"mixed":0,"bearish":0},"categories":{"strong":[],"bullish":[],"mixed":[],"bearish":[]},"tokens":[]}</script>
 </body>
 </html>
