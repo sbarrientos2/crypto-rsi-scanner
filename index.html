@@ -1589,6 +1589,10 @@
         let scanning = false;
         let secondsUntilRefresh = CONFIG.REFRESH_INTERVAL_S;
 
+        // Query-param filter applied to the embedded JSON blob and ?view=json output.
+        // null = include all statuses. Otherwise a Set of allowed status strings.
+        let jsonStatusFilter = null;
+
         // Theme (persisted in localStorage)
         const THEME_KEY = 'rsi-scanner-theme';
         function initTheme() {
@@ -2112,7 +2116,10 @@
         // Build the canonical JSON payload the agent (or anyone) consumes
         function buildScannerPayload(state, errorMessage) {
             const ts = new Date().toISOString();
-            const tokens = allData.map(d => ({
+            const sourceData = jsonStatusFilter
+                ? allData.filter(d => jsonStatusFilter.has(d.status))
+                : allData;
+            const tokens = sourceData.map(d => ({
                 symbol: d.symbol,
                 base_asset: d.baseAsset,
                 pair: d.symbol,
@@ -2134,20 +2141,21 @@
                     '1M':  d.div1M
                 }
             }));
-            const byStatus = s => tokens
-                .filter(t => t.status === s)
-                .map(t => ({ symbol: t.base_asset, pair: t.pair }));
+            const byStatus = s => allData
+                .filter(d => d.status === s)
+                .map(d => ({ symbol: d.baseAsset, pair: d.symbol }));
             return {
                 version: 1,
                 state,
                 last_updated: state === 'ready' || state === 'empty' ? ts : null,
                 error: errorMessage || null,
+                filter: jsonStatusFilter ? Array.from(jsonStatusFilter).sort() : 'all',
                 counts: {
-                    total:   tokens.length,
-                    strong:  tokens.filter(t => t.status === 'strong').length,
-                    bullish: tokens.filter(t => t.status === 'bullish').length,
-                    mixed:   tokens.filter(t => t.status === 'mixed').length,
-                    bearish: tokens.filter(t => t.status === 'bearish').length
+                    total:   allData.length,
+                    strong:  allData.filter(d => d.status === 'strong').length,
+                    bullish: allData.filter(d => d.status === 'bullish').length,
+                    mixed:   allData.filter(d => d.status === 'mixed').length,
+                    bearish: allData.filter(d => d.status === 'bearish').length
                 },
                 categories: {
                     strong:  byStatus('strong'),
@@ -2560,12 +2568,32 @@
         document.addEventListener('DOMContentLoaded', () => {
             // Agent-friendly raw-JSON view: ?view=json
             const params = new URLSearchParams(window.location.search);
-            if (params.get('view') === 'json') {
+            const isJsonView = params.get('view') === 'json';
+            if (isJsonView) {
                 document.body.setAttribute('data-view', 'json');
                 const status = document.getElementById('json-view-status');
                 if (status) status.textContent = 'state=loading • scanning…';
                 const out = document.getElementById('json-view');
                 if (out) out.textContent = '';
+            }
+
+            // Status filter for the JSON blob & ?view=json output.
+            // ?filter=all -> include everything. ?filter=strong,bullish -> only those.
+            // Default for ?view=json: strong+bullish (compact output for agents).
+            // Default for table view: all (full blob preserved).
+            const filterParam = params.get('filter');
+            const VALID_STATUSES = ['strong', 'bullish', 'mixed', 'bearish'];
+            if (filterParam) {
+                if (filterParam.toLowerCase() === 'all') {
+                    jsonStatusFilter = null;
+                } else {
+                    const requested = filterParam.split(',')
+                        .map(s => s.trim().toLowerCase())
+                        .filter(s => VALID_STATUSES.includes(s));
+                    jsonStatusFilter = requested.length > 0 ? new Set(requested) : null;
+                }
+            } else if (isJsonView) {
+                jsonStatusFilter = new Set(['strong', 'bullish']);
             }
             startScan();
             // Countdown starts after scan completes, not here
