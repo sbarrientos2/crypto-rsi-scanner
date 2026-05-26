@@ -5,7 +5,10 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-const BINANCE_BASE = 'https://api.binance.com/api/v3';
+// Binance's public market-data CDN. Same API surface as api.binance.com but
+// hosted on Cloudflare and geo-permissive — required because api.binance.com
+// returns HTTP 451 to GitHub Actions runners.
+const BINANCE_BASE = 'https://data-api.binance.vision/api/v3';
 const TIMEFRAMES = ['4h', '12h', '1d', '3d', '1w', '1M'];
 const KLINES_LIMIT = 35;
 const RSI_PERIOD = 14;
