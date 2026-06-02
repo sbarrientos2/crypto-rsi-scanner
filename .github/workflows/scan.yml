@@ -37,6 +37,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "chore(data): update strong.json [skip ci]"
+            git commit -m "chore(data): update strong.json"
             git push
           fi
