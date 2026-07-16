@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RSI Scanner | Crypto Terminal</title>
+    <title>RSI Scanner | Stocks Terminal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1380,10 +1380,10 @@
                     <span class="icon">◈</span>
                     RSI SCANNER
                 </h1>
-                <span class="tagline">// Binance USDT Pairs • Multi-Timeframe Analysis</span>
+                <span class="tagline">// Backpack-Listed US Stocks • Multi-Timeframe Analysis</span>
                 <nav class="market-nav">
-                    <a href="/" class="market-link active">Crypto</a>
-                    <a href="/stocks" class="market-link">Stocks</a>
+                    <a href="/" class="market-link">Crypto</a>
+                    <a href="/stocks" class="market-link active">Stocks</a>
                 </nav>
             </div>
             <div class="header-controls">
@@ -1407,7 +1407,7 @@
 
         <div class="stats-bar">
             <div class="stat-card">
-                <div class="stat-label">Total Pairs</div>
+                <div class="stat-label">Total Stocks</div>
                 <div class="stat-value" id="statTotal">—</div>
             </div>
             <div class="stat-card strong">
@@ -1430,7 +1430,7 @@
 
         <div class="controls-bar">
             <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Search tokens..." oninput="filterTable()">
+                <input type="text" id="searchInput" placeholder="Search stocks..." oninput="filterTable()">
             </div>
             <div class="filter-group">
                 <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
@@ -1458,7 +1458,7 @@
                     <div class="scanner-ring"></div>
                     <div class="scanner-center"></div>
                 </div>
-                <div class="loading-text">Scanning Binance Markets...</div>
+                <div class="loading-text">Scanning Backpack Stock Listings...</div>
                 <div class="loading-progress" id="loadingProgress">Initializing...</div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill" style="width: 0%"></div>
@@ -1466,7 +1466,7 @@
             </div>
 
             <div class="empty-state" id="emptyState">
-                No tokens match your filters.
+                No stocks match your filters.
             </div>
 
             <div class="table-scroll-wrapper">
@@ -1475,19 +1475,13 @@
                         <tr>
                             <th style="width: 50px; cursor: default;"></th>
                             <th data-sort="symbol" onclick="sortTable('symbol')">
-                                Token <span class="sort-icon">↕</span>
+                                Stock <span class="sort-icon">↕</span>
                             </th>
-                            <th data-sort="rsi4h" onclick="sortTable('rsi4h')">
-                                4H <span class="sort-icon">↕</span>
-                            </th>
-                            <th data-sort="rsi12h" onclick="sortTable('rsi12h')">
-                                12H <span class="sort-icon">↕</span>
+                            <th data-sort="rsi1h" onclick="sortTable('rsi1h')">
+                                1H <span class="sort-icon">↕</span>
                             </th>
                             <th data-sort="rsi1d" onclick="sortTable('rsi1d')">
                                 1D <span class="sort-icon">↕</span>
-                            </th>
-                            <th data-sort="rsi3d" onclick="sortTable('rsi3d')">
-                                3D <span class="sort-icon">↕</span>
                             </th>
                             <th data-sort="rsi1w" onclick="sortTable('rsi1w')">
                                 1W <span class="sort-icon">↕</span>
@@ -1535,7 +1529,7 @@
                 <div class="help-section-title">Filters</div>
                 <div class="help-grid">
                     <span class="help-key">A</span>
-                    <span class="help-desc">All tokens</span>
+                    <span class="help-desc">All stocks</span>
                     <span class="help-key">S</span>
                     <span class="help-desc">⭐ Starred only</span>
                     <span class="help-key">D</span>
@@ -1582,7 +1576,10 @@
             <div class="help-section">
                 <div class="help-section-title">Tips</div>
                 <div style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.6;">
-                    • Click token name to open TradingView chart<br>
+                    • Stocks list follows Backpack Exchange listings automatically<br>
+                    • Price data comes from Yahoo Finance (traditional market, not the tokenized pair)<br>
+                    • 1H candles cover regular market hours only<br>
+                    • Click stock name to open TradingView chart<br>
                     • Click ⭐ to add/remove from watchlist<br>
                     • Click column headers to sort<br>
                     • Data auto-refreshes every 5 minutes<br>
@@ -1649,8 +1646,8 @@
             localStorage.setItem(THEME_KEY, newTheme);
         }
 
-        // Starred tokens (persisted in localStorage)
-        const STORAGE_KEY = 'rsi-scanner-starred';
+        // Starred stocks (persisted in localStorage, separate from the crypto list)
+        const STORAGE_KEY = 'stock-rsi-scanner-starred';
         let starredTokens = new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
 
         // Save starred tokens to localStorage
@@ -1672,12 +1669,10 @@
             applyFilterAndSort();
         }
 
-        // Binance API endpoints
-        const BINANCE_BASE = 'https://api.binance.com/api/v3';
-
-        function buildApiUrl(endpoint) {
-            return BINANCE_BASE + endpoint;
-        }
+        // Same-origin Cloudflare Pages Functions (Yahoo Finance + Backpack proxies).
+        // Yahoo/Backpack send no CORS headers, so the browser can't call them directly.
+        const KLINES_API = '/api/stock-klines';
+        const TICKERS_API = '/api/stock-tickers';
 
         // Cache for slow-moving timeframes (1W, 1M) that rarely change between refreshes.
         // Keyed by "symbol:interval", stores { candles, timestamp }.
@@ -1720,7 +1715,7 @@
         // Timeframes eligible for caching (slow-moving, rarely change)
         const CACHEABLE_INTERVALS = new Set(['1w', '1M']);
 
-        // Get candle data from Binance (full OHLC)
+        // Get candle data via the Yahoo Finance proxy (full OHLC)
         // Slow timeframes (1W, 1M) are cached to reduce API calls on refresh
         async function getKlines(symbol, interval, limit = CONFIG.KLINES_LIMIT) {
             const cacheKey = `${symbol}:${interval}`;
@@ -1735,16 +1730,18 @@
 
             try {
                 const response = await fetch(
-                    buildApiUrl(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`),
+                    `${KLINES_API}?symbol=${encodeURIComponent(symbol)}&interval=${interval}`,
                     { signal: AbortSignal.timeout(CONFIG.FETCH_TIMEOUT_MS) }
                 );
                 if (!response.ok) return null;
                 const data = await response.json();
-                const candles = data.map(candle => ({
-                    open: parseFloat(candle[1]),
-                    high: parseFloat(candle[2]),
-                    low: parseFloat(candle[3]),
-                    close: parseFloat(candle[4])
+                if (!Array.isArray(data.candles) || data.candles.length === 0) return null;
+                // The proxy returns more history than needed; keep the most recent candles
+                const candles = data.candles.slice(-limit).map(candle => ({
+                    open: candle.open,
+                    high: candle.high,
+                    low: candle.low,
+                    close: candle.close
                 }));
 
                 // Cache slow timeframes with size limit to prevent unbounded growth
@@ -1856,37 +1853,29 @@
             return null;
         }
 
-        // Get all USDT pairs
-        async function getUSDTPairs() {
+        // Get the stocks currently listed on Backpack Exchange
+        async function getStockTickers() {
             try {
                 const response = await fetch(
-                    buildApiUrl('/exchangeInfo'),
+                    TICKERS_API,
                     { signal: AbortSignal.timeout(CONFIG.FETCH_TIMEOUT_MS) }
                 );
                 if (!response.ok) return [];
                 const data = await response.json();
-                return data.symbols
-                    .filter(s =>
-                        s.quoteAsset === 'USDT' &&
-                        s.status === 'TRADING' &&
-                        !s.symbol.includes('UP') &&
-                        !s.symbol.includes('DOWN') &&
-                        !s.symbol.includes('BEAR') &&
-                        !s.symbol.includes('BULL')
-                    )
-                    .map(s => ({
-                        symbol: s.symbol,
-                        baseAsset: s.baseAsset
-                    }));
+                return (data.tickers || []).map(t => ({
+                    symbol: t.ticker,
+                    baseAsset: t.ticker,
+                    backpackSymbol: t.backpackSymbol
+                }));
             } catch (error) {
-                console.error('Failed to fetch pairs:', error);
+                console.error('Failed to fetch tickers:', error);
                 return [];
             }
         }
 
         // Determine status based on RSI values
-        function getStatus(rsi4h, rsi12h, rsi1d, rsi3d, rsi1w, rsi1M) {
-            const values = [rsi4h, rsi12h, rsi1d, rsi3d, rsi1w, rsi1M].filter(v => v !== null);
+        function getStatus(rsi1h, rsi1d, rsi1w, rsi1M) {
+            const values = [rsi1h, rsi1d, rsi1w, rsi1M].filter(v => v !== null);
             if (values.length === 0) return { status: 'unknown', priority: 0 };
 
             const allAbove60 = values.every(v => v > CONFIG.STRONG_THRESHOLD);
@@ -1943,22 +1932,18 @@
             }
         }
 
-        // Process a single trading pair: fetch candles, compute RSI, detect divergences
+        // Process a single stock: fetch candles, compute RSI, detect divergences
         async function processPair(pair) {
-            const [candles4h, candles12h, candles1d, candles3d, candles1w, candles1M] = await Promise.all([
-                getKlines(pair.symbol, '4h', CONFIG.KLINES_LIMIT),
-                getKlines(pair.symbol, '12h', CONFIG.KLINES_LIMIT),
+            const [candles1h, candles1d, candles1w, candles1M] = await Promise.all([
+                getKlines(pair.symbol, '1h', CONFIG.KLINES_LIMIT),
                 getKlines(pair.symbol, '1d', CONFIG.KLINES_LIMIT),
-                getKlines(pair.symbol, '3d', CONFIG.KLINES_LIMIT),
                 getKlines(pair.symbol, '1w', CONFIG.KLINES_LIMIT),
                 getKlines(pair.symbol, '1M', CONFIG.KLINES_LIMIT)
             ]);
 
             const timeframes = [
-                { candles: candles4h, key: '4h' },
-                { candles: candles12h, key: '12h' },
+                { candles: candles1h, key: '1h' },
                 { candles: candles1d, key: '1d' },
-                { candles: candles3d, key: '3d' },
                 { candles: candles1w, key: '1w' },
                 { candles: candles1M, key: '1M' }
             ];
@@ -1979,23 +1964,19 @@
             }
 
             const { status, priority } = getStatus(
-                rsiResults['4h'], rsiResults['12h'], rsiResults['1d'],
-                rsiResults['3d'], rsiResults['1w'], rsiResults['1M']
+                rsiResults['1h'], rsiResults['1d'], rsiResults['1w'], rsiResults['1M']
             );
 
             return {
                 symbol: pair.symbol,
                 baseAsset: pair.baseAsset,
-                rsi4h: rsiResults['4h'],
-                rsi12h: rsiResults['12h'],
+                backpackSymbol: pair.backpackSymbol,
+                rsi1h: rsiResults['1h'],
                 rsi1d: rsiResults['1d'],
-                rsi3d: rsiResults['3d'],
                 rsi1w: rsiResults['1w'],
                 rsi1M: rsiResults['1M'],
-                div4h: divResults['4h'],
-                div12h: divResults['12h'],
+                div1h: divResults['1h'],
                 div1d: divResults['1d'],
-                div3d: divResults['3d'],
                 div1w: divResults['1w'],
                 div1M: divResults['1M'],
                 status,
@@ -2027,12 +2008,12 @@
             document.getElementById('countdown').textContent = '—:——';
 
             try {
-                // Get all USDT pairs
-                updateProgress(0, 100, 'Fetching trading pairs...');
-                const pairs = await getUSDTPairs();
+                // Get the stocks currently listed on Backpack
+                updateProgress(0, 100, 'Fetching Backpack stock listings...');
+                const pairs = await getStockTickers();
 
                 if (pairs.length === 0) {
-                    throw new Error('No pairs found');
+                    throw new Error('No stocks found');
                 }
 
                 allData = [];
@@ -2059,13 +2040,13 @@
                         const results = settled
                             .filter(r => r.status === 'fulfilled')
                             .map(r => r.value);
-                        allData.push(...results.filter(r => r.rsi4h !== null || r.rsi1d !== null || r.rsi1w !== null));
+                        allData.push(...results.filter(r => r.rsi1h !== null || r.rsi1d !== null || r.rsi1w !== null));
 
                         completedPairs += batch.length;
                         updateProgress(
                             Math.min(completedPairs, pairs.length),
                             pairs.length,
-                            `Scanning ${Math.min(completedPairs, pairs.length)} of ${pairs.length} pairs...`
+                            `Scanning ${Math.min(completedPairs, pairs.length)} of ${pairs.length} stocks...`
                         );
 
                         // Small delay between batches to respect rate limits
@@ -2157,30 +2138,27 @@
             const tokens = sourceData.map(d => ({
                 symbol: d.symbol,
                 base_asset: d.baseAsset,
-                pair: d.symbol,
+                pair: d.backpackSymbol || d.symbol,
                 status: d.status,
                 rsi: {
-                    '4h':  d.rsi4h,
-                    '12h': d.rsi12h,
-                    '1d':  d.rsi1d,
-                    '3d':  d.rsi3d,
-                    '1w':  d.rsi1w,
-                    '1M':  d.rsi1M
+                    '1h': d.rsi1h,
+                    '1d': d.rsi1d,
+                    '1w': d.rsi1w,
+                    '1M': d.rsi1M
                 },
                 divergences: {
-                    '4h':  d.div4h,
-                    '12h': d.div12h,
-                    '1d':  d.div1d,
-                    '3d':  d.div3d,
-                    '1w':  d.div1w,
-                    '1M':  d.div1M
+                    '1h': d.div1h,
+                    '1d': d.div1d,
+                    '1w': d.div1w,
+                    '1M': d.div1M
                 }
             }));
             const byStatus = s => allData
                 .filter(d => d.status === s)
-                .map(d => ({ symbol: d.baseAsset, pair: d.symbol }));
+                .map(d => ({ symbol: d.baseAsset, pair: d.backpackSymbol || d.symbol }));
             return {
                 version: 1,
+                market: 'stocks',
                 state,
                 last_updated: state === 'ready' || state === 'empty' ? ts : null,
                 error: errorMessage || null,
@@ -2262,7 +2240,7 @@
                 } else if (currentFilter === 'starred') {
                     matchesFilter = starredTokens.has(item.symbol);
                 } else if (currentFilter === 'divergence') {
-                    matchesFilter = item.div4h || item.div12h || item.div1d || item.div3d || item.div1w || item.div1M;
+                    matchesFilter = item.div1h || item.div1d || item.div1w || item.div1M;
                 } else {
                     matchesFilter = item.status === currentFilter;
                 }
@@ -2286,21 +2264,13 @@
                         aVal = a.symbol;
                         bVal = b.symbol;
                         break;
-                    case 'rsi4h':
-                        aVal = a.rsi4h ?? -1;
-                        bVal = b.rsi4h ?? -1;
-                        break;
-                    case 'rsi12h':
-                        aVal = a.rsi12h ?? -1;
-                        bVal = b.rsi12h ?? -1;
+                    case 'rsi1h':
+                        aVal = a.rsi1h ?? -1;
+                        bVal = b.rsi1h ?? -1;
                         break;
                     case 'rsi1d':
                         aVal = a.rsi1d ?? -1;
                         bVal = b.rsi1d ?? -1;
-                        break;
-                    case 'rsi3d':
-                        aVal = a.rsi3d ?? -1;
-                        bVal = b.rsi3d ?? -1;
                         break;
                     case 'rsi1w':
                         aVal = a.rsi1w ?? -1;
@@ -2350,16 +2320,13 @@
                 <tr data-status="${item.status}"
                     data-symbol="${item.symbol}"
                     data-base-asset="${item.baseAsset}"
-                    data-rsi-4h="${attr(item.rsi4h)}"
-                    data-rsi-12h="${attr(item.rsi12h)}"
+                    data-backpack-symbol="${attr(item.backpackSymbol)}"
+                    data-rsi-1h="${attr(item.rsi1h)}"
                     data-rsi-1d="${attr(item.rsi1d)}"
-                    data-rsi-3d="${attr(item.rsi3d)}"
                     data-rsi-1w="${attr(item.rsi1w)}"
                     data-rsi-1m="${attr(item.rsi1M)}"
-                    data-div-4h="${attr(item.div4h)}"
-                    data-div-12h="${attr(item.div12h)}"
+                    data-div-1h="${attr(item.div1h)}"
                     data-div-1d="${attr(item.div1d)}"
-                    data-div-3d="${attr(item.div3d)}"
                     data-div-1w="${attr(item.div1w)}"
                     data-div-1m="${attr(item.div1M)}">
                     <td>
@@ -2372,32 +2339,23 @@
                     <td>
                         <div class="token-cell">
                             <div>
-                                <a href="https://www.tradingview.com/chart/?symbol=BINANCE:${item.symbol}"
+                                <a href="https://www.tradingview.com/chart/?symbol=${item.symbol}"
                                    target="_blank"
                                    class="token-link"
                                    title="Open ${item.baseAsset} chart on TradingView">
                                     <span class="token-name">${item.baseAsset}</span>
                                     <span class="chart-icon">📈</span>
                                 </a>
-                                <div class="token-pair">${item.symbol}</div>
+                                <div class="token-pair">${item.backpackSymbol || item.symbol}</div>
                             </div>
                         </div>
                     </td>
                     <td>
                         <div class="rsi-cell">
-                            <span class="rsi-value">${formatRSI(item.rsi4h)}${getRSIIndicator(item.rsi4h)}${getDivergenceIndicator(item.div4h)}</span>
+                            <span class="rsi-value">${formatRSI(item.rsi1h)}${getRSIIndicator(item.rsi1h)}${getDivergenceIndicator(item.div1h)}</span>
                             <div class="rsi-bar">
-                                <div class="rsi-bar-fill ${getRSIClass(item.rsi4h)}"
-                                     style="width: ${item.rsi4h !== null ? item.rsi4h : 0}%"></div>
-                            </div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="rsi-cell">
-                            <span class="rsi-value">${formatRSI(item.rsi12h)}${getRSIIndicator(item.rsi12h)}${getDivergenceIndicator(item.div12h)}</span>
-                            <div class="rsi-bar">
-                                <div class="rsi-bar-fill ${getRSIClass(item.rsi12h)}"
-                                     style="width: ${item.rsi12h !== null ? item.rsi12h : 0}%"></div>
+                                <div class="rsi-bar-fill ${getRSIClass(item.rsi1h)}"
+                                     style="width: ${item.rsi1h !== null ? item.rsi1h : 0}%"></div>
                             </div>
                         </div>
                     </td>
@@ -2407,15 +2365,6 @@
                             <div class="rsi-bar">
                                 <div class="rsi-bar-fill ${getRSIClass(item.rsi1d)}"
                                      style="width: ${item.rsi1d !== null ? item.rsi1d : 0}%"></div>
-                            </div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="rsi-cell">
-                            <span class="rsi-value">${formatRSI(item.rsi3d)}${getRSIIndicator(item.rsi3d)}${getDivergenceIndicator(item.div3d)}</span>
-                            <div class="rsi-bar">
-                                <div class="rsi-bar-fill ${getRSIClass(item.rsi3d)}"
-                                     style="width: ${item.rsi3d !== null ? item.rsi3d : 0}%"></div>
                             </div>
                         </div>
                     </td>
@@ -2635,6 +2584,6 @@
             // Countdown starts after scan completes, not here
         });
     </script>
-    <script type="application/json" id="scanner-data">{"version":1,"state":"loading","last_updated":null,"counts":{"total":0,"strong":0,"bullish":0,"mixed":0,"bearish":0},"categories":{"strong":[],"bullish":[],"mixed":[],"bearish":[]},"tokens":[]}</script>
+    <script type="application/json" id="scanner-data">{"version":1,"market":"stocks","state":"loading","last_updated":null,"counts":{"total":0,"strong":0,"bullish":0,"mixed":0,"bearish":0},"categories":{"strong":[],"bullish":[],"mixed":[],"bearish":[]},"tokens":[]}</script>
 </body>
 </html>
