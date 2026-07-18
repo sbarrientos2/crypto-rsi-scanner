@@ -1,11 +1,10 @@
-name: Scan strong RSI tokens
+name: Scan multi-TF RSI (crypto)
 
 on:
   # 5 min past every 4h UTC — gives Binance's 4h candle a moment to settle.
   # Note: GitHub Actions cron has 5–15 min real-world lag.
   schedule:
     - cron: '5 */4 * * *'
-  # Manual trigger button in the Actions tab
   workflow_dispatch:
 
 permissions:
@@ -18,7 +17,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -26,17 +25,20 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Run scan
+      - name: Unit tests
+        run: npm test
+
+      - name: Run full market scan
         run: node scan.mjs
 
-      - name: Commit updated data/strong.json
+      - name: Commit updated scan data
         run: |
           git config user.name  "rsi-scan-bot"
           git config user.email "rsi-scan-bot@users.noreply.github.com"
-          git add data/strong.json
+          git add data/scan.json data/strong.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "chore(data): update strong.json"
+            git commit -m "chore(data): update scan.json + strong.json"
             git push
           fi

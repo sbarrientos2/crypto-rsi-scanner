@@ -1,21 +1,28 @@
-// scan.mjs — runs hourly via GitHub Actions, writes data/strong.json
-// "Strong" = every available RSI timeframe (4h/12h/1d/3d/1w/1M) is > 60.
-// Output is intentionally minimal: { last_updated, count, tokens: ["BTC", ...] }
+// scan.mjs — runs every 4h via GitHub Actions (cron at :05 after each 4h candle).
+// Writes:
+//   data/scan.json   — full multi-TF RSI + divergences + status (consumed by the crypto UI)
+//   data/strong.json — compact list of tokens with status === 'strong' (derived subset)
+//
+// Uses shared modules so CI and the browser share the same RSI / status / divergence logic.
 
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-// Binance's public market-data CDN. Same API surface as api.binance.com but
-// hosted on Cloudflare and geo-permissive — required because api.binance.com
-// returns HTTP 451 to GitHub Actions runners.
-const BINANCE_BASE = 'https://data-api.binance.vision/api/v3';
-const TIMEFRAMES = ['4h', '12h', '1d', '3d', '1w', '1M'];
-const KLINES_LIMIT = 35;
-const RSI_PERIOD = 14;
-const STRONG_THRESHOLD = 60;
+import {
+    BINANCE_VISION_BASE,
+    CRYPTO_TIMEFRAMES,
+    DEFAULT_CONFIG,
+} from './js/shared/config.js';
+import { analyzeTimeframes } from './js/shared/analyze.js';
+import { roundRsi } from './js/shared/util.js';
+
+const BINANCE_BASE = BINANCE_VISION_BASE;
+const TIMEFRAMES = CRYPTO_TIMEFRAMES;
+const KLINES_LIMIT = DEFAULT_CONFIG.KLINES_LIMIT;
 const CONCURRENCY = 25;
 const FETCH_TIMEOUT_MS = 20000;
-const OUTPUT = 'data/strong.json';
+const SCAN_OUTPUT = 'data/scan.json';
+const STRONG_OUTPUT = 'data/strong.json';
 
 async function main() {
     const startedAt = Date.now();
@@ -36,7 +43,8 @@ async function main() {
             try {
                 const r = await processPair(pair);
                 if (r) results.push(r);
-            } catch (e) {
+                else failed++;
+            } catch {
                 failed++;
             }
             processed++;
@@ -47,60 +55,132 @@ async function main() {
     }
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-    const strong = results
-        .filter(r => r.status === 'strong')
-        .map(r => r.baseAsset)
-        .sort();
+    // Stable sort: strong first, then by symbol
+    results.sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return a.base_asset.localeCompare(b.base_asset);
+    });
 
-    const payload = {
-        last_updated: new Date().toISOString(),
-        count: strong.length,
-        tokens: strong
+    const last_updated = new Date().toISOString();
+    const counts = {
+        total: results.length,
+        strong: results.filter(r => r.status === 'strong').length,
+        bullish: results.filter(r => r.status === 'bullish').length,
+        mixed: results.filter(r => r.status === 'mixed').length,
+        bearish: results.filter(r => r.status === 'bearish').length,
+    };
+    const incomplete = results.filter(r => r.incomplete).length;
+
+    const byStatus = s =>
+        results
+            .filter(r => r.status === s)
+            .map(r => ({ symbol: r.base_asset, pair: r.symbol }));
+
+    const scanPayload = {
+        version: 1,
+        market: 'crypto',
+        state: 'ready',
+        last_updated,
+        error: null,
+        filter: 'all',
+        source: 'scan.mjs',
+        health: {
+            processed: pairs.length,
+            failed,
+            incomplete,
+            elapsed_s: Number(((Date.now() - startedAt) / 1000).toFixed(1)),
+        },
+        counts,
+        categories: {
+            strong: byStatus('strong'),
+            bullish: byStatus('bullish'),
+            mixed: byStatus('mixed'),
+            bearish: byStatus('bearish'),
+        },
+        tokens: results.map(r => ({
+            symbol: r.symbol,
+            base_asset: r.base_asset,
+            pair: r.symbol,
+            status: r.status,
+            incomplete: r.incomplete,
+            rsi: r.rsi,
+            divergences: r.divergences,
+        })),
     };
 
-    await mkdir(dirname(OUTPUT), { recursive: true });
-    await writeFile(OUTPUT, JSON.stringify(payload, null, 2) + '\n');
+    const strongTokens = results
+        .filter(r => r.status === 'strong')
+        .map(r => r.base_asset)
+        .sort();
+
+    const strongPayload = {
+        last_updated,
+        count: strongTokens.length,
+        tokens: strongTokens,
+    };
+
+    await mkdir(dirname(SCAN_OUTPUT), { recursive: true });
+    await writeFile(SCAN_OUTPUT, JSON.stringify(scanPayload) + '\n');
+    await writeFile(STRONG_OUTPUT, JSON.stringify(strongPayload, null, 2) + '\n');
 
     const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-    console.log(`✓ ${OUTPUT} written — ${strong.length} strong tokens in ${elapsed}s`);
-    if (strong.length > 0) console.log(`  ${strong.join(', ')}`);
+    console.log(
+        `✓ ${SCAN_OUTPUT} written — ${results.length} tokens ` +
+            `(${counts.strong} strong, ${incomplete} incomplete, ${failed} failed) in ${elapsed}s`
+    );
+    console.log(`✓ ${STRONG_OUTPUT} written — ${strongTokens.length} strong tokens`);
+    if (strongTokens.length > 0) console.log(`  ${strongTokens.join(', ')}`);
 }
 
 async function getUSDTPairs() {
     const r = await fetch(`${BINANCE_BASE}/exchangeInfo`, {
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!r.ok) throw new Error(`exchangeInfo HTTP ${r.status}`);
     const data = await r.json();
     return data.symbols
-        .filter(s =>
-            s.quoteAsset === 'USDT' &&
-            s.status === 'TRADING' &&
-            !s.symbol.includes('UP') &&
-            !s.symbol.includes('DOWN') &&
-            !s.symbol.includes('BEAR') &&
-            !s.symbol.includes('BULL')
+        .filter(
+            s =>
+                s.quoteAsset === 'USDT' &&
+                s.status === 'TRADING' &&
+                !s.symbol.includes('UP') &&
+                !s.symbol.includes('DOWN') &&
+                !s.symbol.includes('BEAR') &&
+                !s.symbol.includes('BULL')
         )
         .map(s => ({ symbol: s.symbol, baseAsset: s.baseAsset }));
 }
 
 async function processPair(pair) {
-    const candlesPerTf = await Promise.all(
-        TIMEFRAMES.map(tf => getKlines(pair.symbol, tf))
+    const candlesByTf = {};
+    await Promise.all(
+        TIMEFRAMES.map(async tf => {
+            candlesByTf[tf] = await getKlines(pair.symbol, tf);
+        })
     );
 
-    const rsiValues = [];
-    for (const candles of candlesPerTf) {
-        if (!candles) continue;
-        const closes = candles.map(c => parseFloat(c[4]));
-        const rsi = calculateRSI(closes);
-        if (rsi !== null) rsiValues.push(rsi);
-    }
-    if (rsiValues.length === 0) return null;
+    // Need at least one timeframe with data
+    const any = TIMEFRAMES.some(tf => candlesByTf[tf]?.length);
+    if (!any) return null;
 
-    // Mirrors getStatus() in index.html: "strong" = ALL non-null RSI values > 60.
-    const status = rsiValues.every(v => v > STRONG_THRESHOLD) ? 'strong' : 'other';
-    return { symbol: pair.symbol, baseAsset: pair.baseAsset, status };
+    const analysis = analyzeTimeframes(candlesByTf, TIMEFRAMES, DEFAULT_CONFIG);
+
+    const rsi = {};
+    const divergences = {};
+    for (const tf of TIMEFRAMES) {
+        rsi[tf] = roundRsi(analysis.rsi[tf]);
+        divergences[tf] = analysis.divergences[tf];
+    }
+
+    return {
+        symbol: pair.symbol,
+        base_asset: pair.baseAsset,
+        status: analysis.status,
+        priority: analysis.priority,
+        incomplete: analysis.incomplete,
+        rsi,
+        divergences,
+    };
 }
 
 async function getKlines(symbol, interval) {
@@ -108,36 +188,16 @@ async function getKlines(symbol, interval) {
         const url = `${BINANCE_BASE}/klines?symbol=${symbol}&interval=${interval}&limit=${KLINES_LIMIT}`;
         const r = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
         if (!r.ok) return null;
-        return await r.json();
+        const data = await r.json();
+        return data.map(c => ({
+            open: parseFloat(c[1]),
+            high: parseFloat(c[2]),
+            low: parseFloat(c[3]),
+            close: parseFloat(c[4]),
+        }));
     } catch {
         return null;
     }
-}
-
-// Wilder's smoothed RSI — same formula as index.html
-function calculateRSI(closes, period = RSI_PERIOD) {
-    if (closes.length < period + 1) return null;
-    let gains = 0, losses = 0;
-    for (let i = 1; i <= period; i++) {
-        const diff = closes[i] - closes[i - 1];
-        if (diff > 0) gains += diff;
-        else losses -= diff;
-    }
-    let avgGain = gains / period;
-    let avgLoss = losses / period;
-    for (let i = period + 1; i < closes.length; i++) {
-        const diff = closes[i] - closes[i - 1];
-        if (diff > 0) {
-            avgGain = (avgGain * (period - 1) + diff) / period;
-            avgLoss = (avgLoss * (period - 1)) / period;
-        } else {
-            avgGain = (avgGain * (period - 1)) / period;
-            avgLoss = (avgLoss * (period - 1) - diff) / period;
-        }
-    }
-    if (avgLoss === 0) return 100;
-    const rs = avgGain / avgLoss;
-    return 100 - (100 / (1 + rs));
 }
 
 main().catch(e => {
