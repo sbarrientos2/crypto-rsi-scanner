@@ -1681,6 +1681,44 @@
             return BINANCE_BASE + endpoint;
         }
 
+        // CoinMarketCap ticker → SEO slug map (from data/cmc-slugs.json, built in CI).
+        // Example: JST → "just" → https://coinmarketcap.com/currencies/just/
+        let cmcSlugs = Object.create(null);
+
+        async function loadCmcSlugs() {
+            try {
+                const response = await fetch(`/data/cmc-slugs.json?t=${Date.now()}`, {
+                    signal: AbortSignal.timeout(10000),
+                    cache: 'no-cache',
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                const map = data.slugs && typeof data.slugs === 'object' ? data.slugs : data;
+                cmcSlugs = Object.create(null);
+                for (const [symbol, slug] of Object.entries(map)) {
+                    if (typeof slug === 'string' && slug) cmcSlugs[symbol] = slug;
+                }
+            } catch {
+                // Missing map → CMC links fall back to search
+            }
+        }
+
+        /** Direct currency page when slug known; otherwise CMC search. */
+        function cmcUrl(baseAsset) {
+            const slug = cmcSlugs[baseAsset];
+            if (slug) {
+                return `https://coinmarketcap.com/currencies/${encodeURIComponent(slug)}/`;
+            }
+            return `https://coinmarketcap.com/search/?q=${encodeURIComponent(baseAsset)}`;
+        }
+
+        function cmcLinkTitle(baseAsset) {
+            const slug = cmcSlugs[baseAsset];
+            return slug
+                ? `Open ${baseAsset} on CoinMarketCap`
+                : `Search ${baseAsset} on CoinMarketCap (slug map miss)`;
+        }
+
         // Cache for slow-moving timeframes (1W, 1M) that rarely change between refreshes.
         // Keyed by "symbol:interval", stores { candles, timestamp }.
         // Entries expire after 10 minutes to ensure data stays reasonably fresh.
@@ -2383,11 +2421,11 @@
                                         <span class="token-name">${item.baseAsset}</span>
                                         <span class="chart-icon token-ext-icon" aria-hidden="true">📈</span>
                                     </a>
-                                    <a href="https://coinmarketcap.com/search/?q=${encodeURIComponent(item.baseAsset)}"
+                                    <a href="${cmcUrl(item.baseAsset)}"
                                        target="_blank"
                                        rel="noopener noreferrer"
                                        class="token-ext-icon cmc-link"
-                                       title="Open ${item.baseAsset} on CoinMarketCap"
+                                       title="${cmcLinkTitle(item.baseAsset)}"
                                        onclick="event.stopPropagation()">
                                         CMC
                                     </a>
@@ -2643,6 +2681,11 @@
             } else if (isJsonView) {
                 jsonStatusFilter = new Set(['strong', 'bullish']);
             }
+            // Load CMC slugs in parallel with the scan. Re-render if the map
+            // arrives after the first table paint so links use direct slugs.
+            loadCmcSlugs().then(() => {
+                if (allData.length > 0) applyFilterAndSort();
+            });
             startScan();
             // Countdown starts after scan completes, not here
         });
