@@ -595,12 +595,18 @@
             color: var(--text-primary);
         }
 
+        .token-title-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
         .token-link {
             color: var(--text-primary);
             text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 0.4rem;
+            gap: 0.35rem;
             transition: color 0.2s ease;
         }
 
@@ -608,14 +614,44 @@
             color: var(--accent-cyan);
         }
 
-        .token-link .chart-icon {
-            font-size: 0.7rem;
+        .token-ext-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
             opacity: 0;
-            transition: opacity 0.2s ease;
+            transition: opacity 0.2s ease, transform 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+            text-decoration: none;
+            line-height: 1;
         }
 
-        .token-link:hover .chart-icon {
+        .token-title-row:hover .token-ext-icon {
             opacity: 1;
+        }
+
+        .token-link .chart-icon {
+            font-size: 0.7rem;
+        }
+
+        /* CoinMarketCap badge — compact blue chip next to the chart icon */
+        .cmc-link {
+            font-family: var(--font-mono, 'JetBrains Mono', monospace);
+            font-size: 0.55rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: #6b8cff;
+            border: 1px solid rgba(56, 97, 251, 0.45);
+            background: rgba(56, 97, 251, 0.12);
+            border-radius: 3px;
+            padding: 0.12rem 0.28rem;
+            height: 1.05rem;
+        }
+
+        .cmc-link:hover {
+            color: #a8bbff;
+            border-color: rgba(56, 97, 251, 0.85);
+            background: rgba(56, 97, 251, 0.22);
+            transform: translateY(-1px);
         }
 
         .token-pair {
@@ -1252,9 +1288,9 @@
                 padding: 0.25rem 0;
             }
 
-            /* Show chart icon always on touch devices */
-            .token-link .chart-icon {
-                opacity: 0.6;
+            /* Show external icons always on touch devices */
+            .token-ext-icon {
+                opacity: 0.7;
             }
         }
 
@@ -1547,7 +1583,8 @@
             <div class="help-section">
                 <div class="help-section-title">Tips</div>
                 <div style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.6;">
-                    • Click token name to open TradingView chart<br>
+                    • Click token name / 📈 for TradingView chart<br>
+                    • Click <strong>CMC</strong> badge for CoinMarketCap<br>
                     • Click ⭐ to add/remove from watchlist<br>
                     • Click column headers to sort<br>
                     • Data auto-refreshes every 5 minutes<br>
@@ -2337,13 +2374,24 @@
                     <td>
                         <div class="token-cell">
                             <div>
-                                <a href="https://www.tradingview.com/chart/?symbol=BINANCE:${item.symbol}"
-                                   target="_blank"
-                                   class="token-link"
-                                   title="Open ${item.baseAsset} chart on TradingView">
-                                    <span class="token-name">${item.baseAsset}</span>
-                                    <span class="chart-icon">📈</span>
-                                </a>
+                                <div class="token-title-row">
+                                    <a href="https://www.tradingview.com/chart/?symbol=BINANCE:${item.symbol}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="token-link"
+                                       title="Open ${item.baseAsset} chart on TradingView">
+                                        <span class="token-name">${item.baseAsset}</span>
+                                        <span class="chart-icon token-ext-icon" aria-hidden="true">📈</span>
+                                    </a>
+                                    <a href="https://coinmarketcap.com/search/?q=${encodeURIComponent(item.baseAsset)}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="token-ext-icon cmc-link"
+                                       title="Open ${item.baseAsset} on CoinMarketCap"
+                                       onclick="event.stopPropagation()">
+                                        CMC
+                                    </a>
+                                </div>
                                 <div class="token-pair">${item.symbol}</div>
                             </div>
                         </div>
