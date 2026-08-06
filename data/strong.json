@@ -1,13 +1,17 @@
 {
-  "last_updated": "2026-08-06T10:40:09.319Z",
-  "count": 7,
+  "last_updated": "2026-08-06T14:11:42.594Z",
+  "count": 11,
   "tokens": [
     "AAOIB",
     "AVGOB",
-    "DELLB",
-    "GSB",
-    "IBMB",
+    "AXTIB",
+    "BEB",
+    "LITEB",
+    "MSFTB",
+    "NVDAB",
+    "ORCLB",
     "PLTRB",
+    "SMHB",
     "SPYB"
   ]
 }
