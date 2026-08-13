@@ -1,12 +1,14 @@
 {
-  "last_updated": "2026-08-13T13:12:35.266Z",
-  "count": 13,
+  "last_updated": "2026-08-13T16:56:35.461Z",
+  "count": 18,
   "tokens": [
+    "AMATB",
     "ASMLB",
     "BEB",
     "CRDOB",
     "CRWVB",
     "DELLB",
+    "GSB",
     "IRENB",
     "NBISB",
     "NFLXB",
@@ -14,6 +16,9 @@
     "ORCLB",
     "PUMP",
     "QNTB",
-    "SMCIB"
+    "SMCIB",
+    "SMHB",
+    "SPYB",
+    "TQQQB"
   ]
 }
