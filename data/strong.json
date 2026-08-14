@@ -1,12 +1,14 @@
 {
-  "last_updated": "2026-08-14T16:53:35.479Z",
-  "count": 6,
+  "last_updated": "2026-08-14T20:31:33.671Z",
+  "count": 8,
   "tokens": [
     "AAOIB",
+    "ASMLB",
+    "GMEB",
     "NBISB",
     "NFLXB",
+    "PYPLB",
     "SMCIB",
-    "USARB",
-    "XUSD"
+    "USARB"
   ]
 }
