@@ -1,9 +1,10 @@
 {
-  "last_updated": "2026-08-14T05:38:04.251Z",
+  "last_updated": "2026-08-14T09:07:15.468Z",
   "count": 17,
   "tokens": [
     "ASMLB",
     "BEB",
+    "CRDOB",
     "CRWVB",
     "DELLB",
     "IRENB",
@@ -17,7 +18,6 @@
     "QNTB",
     "SMCIB",
     "SPYB",
-    "TQQQB",
-    "XUSD"
+    "TQQQB"
   ]
 }
