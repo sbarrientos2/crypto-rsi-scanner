@@ -1,23 +1,26 @@
 {
-  "last_updated": "2026-08-17T04:42:07.070Z",
-  "count": 17,
+  "last_updated": "2026-08-17T08:44:02.554Z",
+  "count": 20,
   "tokens": [
     "AAOIB",
     "ASMLB",
     "AXTIB",
+    "BEB",
     "CRDOB",
     "CRWVB",
     "DELLB",
+    "GMEB",
     "IRENB",
     "JST",
+    "LITEB",
     "NBISB",
     "NFLXB",
     "NVDAB",
+    "PUMP",
     "SMCIB",
     "SMHB",
     "SPYB",
     "TQQQB",
-    "USARB",
-    "USDE"
+    "USARB"
   ]
 }
