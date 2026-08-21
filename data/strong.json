@@ -1,15 +1,16 @@
 {
-  "last_updated": "2026-08-21T12:49:17.106Z",
-  "count": 9,
+  "last_updated": "2026-08-21T16:35:25.785Z",
+  "count": 10,
   "tokens": [
     "AERO",
     "BMNRB",
+    "COINB",
     "CRCLB",
-    "HEMI",
+    "HOODB",
     "MORPHO",
-    "MRVLB",
     "MSTRB",
-    "MVLLB",
-    "PUMP"
+    "PLTRB",
+    "PUMP",
+    "ZEC"
   ]
 }
