@@ -1,8 +1,7 @@
 {
-  "last_updated": "2026-09-04T03:20:58.045Z",
-  "count": 12,
+  "last_updated": "2026-09-04T08:32:51.712Z",
+  "count": 13,
   "tokens": [
-    "AAPLB",
     "BEB",
     "BMNRB",
     "COINB",
@@ -12,7 +11,9 @@
     "GMEB",
     "HOODB",
     "MSTRB",
+    "NVDAB",
     "ORCLB",
+    "SPYB",
     "ZEC"
   ]
 }
