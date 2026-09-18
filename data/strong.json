@@ -1,8 +1,9 @@
 {
-  "last_updated": "2026-09-17T22:42:35.951Z",
-  "count": 9,
+  "last_updated": "2026-09-18T03:39:05.678Z",
+  "count": 11,
   "tokens": [
     "AAPLB",
+    "AERO",
     "BEB",
     "BNCB",
     "CRWDB",
@@ -10,6 +11,7 @@
     "GMEB",
     "INTWB",
     "METAB",
+    "MRNAB",
     "ZEC"
   ]
 }
