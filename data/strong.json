@@ -1,6 +1,6 @@
 {
-  "last_updated": "2026-09-18T03:39:05.678Z",
-  "count": 11,
+  "last_updated": "2026-09-18T08:51:51.652Z",
+  "count": 14,
   "tokens": [
     "AAPLB",
     "AERO",
@@ -10,8 +10,11 @@
     "DELLB",
     "GMEB",
     "INTWB",
+    "JST",
+    "MET",
     "METAB",
     "MRNAB",
+    "MRVLB",
     "ZEC"
   ]
 }
