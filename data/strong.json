@@ -1,11 +1,15 @@
 {
-  "last_updated": "2026-09-20T15:36:50.362Z",
-  "count": 5,
+  "last_updated": "2026-09-20T18:31:28.791Z",
+  "count": 9,
   "tokens": [
+    "AERO",
     "BNCB",
     "INTWB",
+    "MORPHO",
     "MSTRB",
+    "NEAR",
     "SOMI",
-    "ZAMA"
+    "ZAMA",
+    "ZEC"
   ]
 }
