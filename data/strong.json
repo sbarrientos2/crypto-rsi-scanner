@@ -1,14 +1,11 @@
 {
-  "last_updated": "2026-09-22T09:06:49.900Z",
-  "count": 23,
+  "last_updated": "2026-09-22T16:27:45.376Z",
+  "count": 24,
   "tokens": [
     "AAPLB",
-    "AERO",
     "AMDB",
     "ARMB",
-    "AXTIB",
     "BMNRB",
-    "CRWDB",
     "GMEB",
     "HIMSB",
     "INTWB",
@@ -17,13 +14,17 @@
     "MRNAB",
     "MRVLB",
     "MSTRB",
+    "MUBARAK",
+    "MUUB",
+    "MVLLB",
     "NEAR",
     "PLTRB",
-    "PUMP",
-    "RDDTB",
+    "QCOMB",
+    "QQQB",
     "SMHB",
+    "STXB",
     "TQQQB",
-    "TRX",
-    "ZAMA"
+    "TSMB",
+    "ZEC"
   ]
 }
