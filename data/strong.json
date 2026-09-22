@@ -1,11 +1,15 @@
 {
-  "last_updated": "2026-09-22T16:27:45.376Z",
-  "count": 24,
+  "last_updated": "2026-09-22T22:46:30.938Z",
+  "count": 31,
   "tokens": [
     "AAPLB",
+    "AERO",
     "AMDB",
     "ARMB",
+    "AXTIB",
     "BMNRB",
+    "COINB",
+    "CRWDB",
     "GMEB",
     "HIMSB",
     "INTWB",
@@ -19,12 +23,15 @@
     "MVLLB",
     "NEAR",
     "PLTRB",
+    "PLUME",
+    "PUMP",
     "QCOMB",
     "QQQB",
     "SMHB",
     "STXB",
     "TQQQB",
     "TSMB",
-    "ZEC"
+    "UNI",
+    "ZAMA"
   ]
 }
