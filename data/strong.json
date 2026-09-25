@@ -1,6 +1,6 @@
 {
-  "last_updated": "2026-09-24T23:03:40.158Z",
-  "count": 12,
+  "last_updated": "2026-09-25T03:52:24.899Z",
+  "count": 14,
   "tokens": [
     "AMDB",
     "CRWDB",
@@ -10,6 +10,8 @@
     "METAB",
     "MORPHO",
     "MRNAB",
+    "MRVLB",
+    "MVLLB",
     "PLTRB",
     "PLUME",
     "SMHB",
