@@ -1,26 +1,28 @@
 {
-  "last_updated": "2026-09-25T16:45:08.930Z",
-  "count": 20,
+  "last_updated": "2026-09-25T23:08:26.586Z",
+  "count": 22,
   "tokens": [
     "AAPLB",
     "AERO",
+    "AGPUB",
     "AMDB",
     "AXTIB",
     "BEB",
+    "CYPHB",
     "JST",
+    "MET",
     "MRNAB",
     "MRVLB",
     "MSFTB",
     "MVLLB",
     "NEAR",
-    "PLTRB",
     "PLUME",
     "QCOMB",
     "QQQB",
+    "SKY",
     "SMCIB",
     "SMHB",
-    "STXB",
-    "TQQQB",
-    "TSMB"
+    "SOMI",
+    "TQQQB"
   ]
 }
