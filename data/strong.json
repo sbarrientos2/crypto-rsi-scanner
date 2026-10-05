@@ -1,29 +1,20 @@
 {
-  "last_updated": "2026-10-04T04:45:07.214Z",
-  "count": 23,
+  "last_updated": "2026-10-05T04:33:02.473Z",
+  "count": 14,
   "tokens": [
-    "AERO",
+    "AMATB",
     "AMDB",
     "ASMLB",
     "AXTIB",
-    "BNCB",
-    "CRWDB",
-    "ESP",
     "GMEB",
     "HPEB",
     "JST",
     "LITEB",
     "MRVLB",
     "MVLLB",
-    "NIGHT",
-    "PUMP",
-    "QQQB",
-    "SENT",
     "SKY",
     "SMCIB",
     "SMHB",
-    "TQQQB",
-    "TSMB",
-    "ZAMA"
+    "TSMB"
   ]
 }
