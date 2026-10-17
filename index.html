@@ -444,6 +444,20 @@
             display: block;
         }
 
+        .refresh-bar {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            letter-spacing: 0.04em;
+            color: var(--text-secondary);
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.4rem 0.75rem;
+        }
+
+        .refresh-bar[hidden] {
+            display: none;
+        }
+
         .scanner-animation {
             width: 120px;
             height: 120px;
@@ -1385,7 +1399,7 @@
                     <span class="icon">◈</span>
                     RSI SCANNER
                 </h1>
-                <span class="tagline">// Binance USDT Pairs • Multi-Timeframe Analysis</span>
+                <span class="tagline" id="tagline">// Binance USDT · ≥ $1M · closed candles</span>
             </div>
             <div class="header-controls">
                 <div class="timer-display last-updated-display">
@@ -1437,11 +1451,14 @@
                 <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
                 <button class="filter-btn starred-filter" data-filter="starred" onclick="setFilter('starred')">⭐ Starred</button>
                 <button class="filter-btn div-filter" data-filter="divergence" onclick="setFilter('divergence')">📊 Divergence</button>
+                <button class="filter-btn" data-filter="oversold" onclick="setFilter('oversold')">OS 4H+1D</button>
+                <button class="filter-btn" data-filter="overbought" onclick="setFilter('overbought')">OB 4H+1D</button>
                 <button class="filter-btn" data-filter="strong" onclick="setFilter('strong')">🔥 Strong</button>
                 <button class="filter-btn" data-filter="bullish" onclick="setFilter('bullish')">✅ Bullish</button>
                 <button class="filter-btn" data-filter="mixed" onclick="setFilter('mixed')">⚠️ Mixed</button>
                 <button class="filter-btn" data-filter="bearish" onclick="setFilter('bearish')">❌ Bearish</button>
             </div>
+            <button class="filter-btn" id="liquidityBtn" onclick="toggleLiquidity()">≥ $1M</button>
             <button class="copy-json-btn" id="copyJsonBtn" onclick="copyScannerJSON()" title="Copy current scan data as JSON">
                 ⧉ Copy JSON
             </button>
@@ -1452,6 +1469,9 @@
         </div>
 
         <div class="table-container">
+            <div id="refreshBar" class="refresh-bar" hidden>
+                <span id="refreshBarText">Refreshing…</span>
+            </div>
             <div class="loading-overlay active" id="loadingOverlay">
                 <div class="scanner-animation">
                     <div class="scanner-ring"></div>
@@ -1541,6 +1561,12 @@
                     <span class="help-desc">⭐ Starred only</span>
                     <span class="help-key">D</span>
                     <span class="help-desc">📊 Divergence only</span>
+                    <span class="help-key">O</span>
+                    <span class="help-desc">OS 4H+1D — both the 4-hour and the daily RSI are ≤ 30</span>
+                    <span class="help-key">K</span>
+                    <span class="help-desc">OB 4H+1D — both the 4-hour and the daily RSI are ≥ 70</span>
+                    <span class="help-key">L</span>
+                    <span class="help-desc">Toggle the $1M volume floor</span>
                     <span class="help-key">F</span>
                     <span class="help-desc">🔥 Strong (RSI &gt; 60 all timeframes)</span>
                     <span class="help-key">B</span>
@@ -1560,9 +1586,9 @@
                     <span class="help-key" style="background: rgba(0,212,255,0.2); color: #00d4ff; border-color: #00d4ff;">OS</span>
                     <span class="help-desc">Oversold — RSI ≤ 30</span>
                     <span class="help-key" style="background: rgba(0,255,136,0.2); color: #00ff88; border-color: #00ff88;">DIV↑</span>
-                    <span class="help-desc">Bullish Divergence — Price higher low, RSI lower low (in oversold)</span>
+                    <span class="help-desc">Bullish reversal — price lower low, RSI higher low, RSI still ≤ 30</span>
                     <span class="help-key" style="background: rgba(255,51,102,0.2); color: #ff3366; border-color: #ff3366;">DIV↓</span>
-                    <span class="help-desc">Bearish Divergence — Price higher high, RSI lower high (in overbought)</span>
+                    <span class="help-desc">Bearish reversal — price higher high, RSI lower high, RSI still ≥ 70</span>
                 </div>
             </div>
 
@@ -1588,23 +1614,27 @@
                     • Click ⭐ to add/remove from watchlist<br>
                     • Click column headers to sort<br>
                     • Data auto-refreshes every 5 minutes<br>
-                    • Divergences must occur within 14 candles and in extreme zones (RSI &lt; 30 or &gt; 70)
+                    • Rows are USDT pairs with at least $1M of quote volume in the last 24 hours. Starred pairs stay listed below that. L shows every trading USDT pair.<br>
+                    • RSI uses the last closed candle. A timeframe is downloaded again only after its candle closes.<br>
+                    • Divergences must occur within 14 candles and in extreme zones (RSI ≤ 30 or ≥ 70)
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="scanner-core.js"></script>
     <script>
         // Configuration — all tunable values in one place
         const CONFIG = {
             RSI_PERIOD: 14,
-            KLINES_LIMIT: 35,
+            KLINES_LIMIT: 100,
+            MIN_QUOTE_VOLUME_USDT: 1_000_000,
+            SHOW_ALL_KEY: 'rsi-scanner-show-all',
             BATCH_SIZE: 10,
             MAX_CONCURRENT_BATCHES: 3,
             BATCH_DELAY_MS: 100,
             FETCH_TIMEOUT_MS: 15000,
             REFRESH_INTERVAL_S: 300,
-            CACHE_TTL_MS: 10 * 60 * 1000,
             MAX_CACHE_ENTRIES: 2500,
             SEARCH_DEBOUNCE_MS: 200,
             OB_THRESHOLD: 70,
@@ -1675,7 +1705,7 @@
         }
 
         // Binance API endpoints
-        const BINANCE_BASE = 'https://api.binance.com/api/v3';
+        const BINANCE_BASE = 'https://data-api.binance.vision/api/v3';
 
         function buildApiUrl(endpoint) {
             return BINANCE_BASE + endpoint;
@@ -1719,209 +1749,142 @@
                 : `Search ${baseAsset} on CoinMarketCap (slug map miss)`;
         }
 
-        // Cache for slow-moving timeframes (1W, 1M) that rarely change between refreshes.
-        // Keyed by "symbol:interval", stores { candles, timestamp }.
-        // Entries expire after 10 minutes to ensure data stays reasonably fresh.
+        // Klines cached until that timeframe's candle closes.
+        // Keyed by "symbol:interval", stores { candles, lastClosedOpen }.
         const klinesCache = new Map();
+        let scanCacheHits = 0;
+        let scanCacheMisses = 0;
+        let rescanRequested = false;
 
-        // RSI Calculation (Wilder's smoothing method)
-        // Returns { value: number|null, series: number[] } to avoid duplicate computation
-        function calculateRSI(closes, period = CONFIG.RSI_PERIOD) {
-            if (closes.length < period + 1) return { value: null, series: [] };
-
-            const gains = [];
-            const losses = [];
-
-            for (let i = 1; i < closes.length; i++) {
-                const change = closes[i] - closes[i - 1];
-                gains.push(change > 0 ? change : 0);
-                losses.push(change < 0 ? Math.abs(change) : 0);
-            }
-
-            // Initial averages
-            let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
-            let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
-
-            const series = [];
-            let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-            series.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + rs)));
-
-            // Wilder's smoothing for remaining periods
-            for (let i = period; i < gains.length; i++) {
-                avgGain = (avgGain * (period - 1) + gains[i]) / period;
-                avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
-                rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-                series.push(avgLoss === 0 ? 100 : 100 - (100 / (1 + rs)));
-            }
-
-            return { value: series[series.length - 1], series };
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
         }
 
-        // Timeframes eligible for caching (slow-moving, rarely change)
-        const CACHEABLE_INTERVALS = new Set(['1w', '1M']);
-
-        // Get candle data from Binance (full OHLC)
-        // Slow timeframes (1W, 1M) are cached to reduce API calls on refresh
-        async function getKlines(symbol, interval, limit = CONFIG.KLINES_LIMIT) {
-            const cacheKey = `${symbol}:${interval}`;
-
-            // Return cached data if available and fresh
-            if (CACHEABLE_INTERVALS.has(interval)) {
-                const cached = klinesCache.get(cacheKey);
-                if (cached && (Date.now() - cached.timestamp) < CONFIG.CACHE_TTL_MS) {
-                    return cached.candles;
-                }
-            }
-
-            try {
-                const response = await fetch(
-                    buildApiUrl(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`),
-                    { signal: AbortSignal.timeout(CONFIG.FETCH_TIMEOUT_MS) }
-                );
-                if (!response.ok) return null;
-                const data = await response.json();
-                const candles = data.map(candle => ({
-                    open: parseFloat(candle[1]),
-                    high: parseFloat(candle[2]),
-                    low: parseFloat(candle[3]),
-                    close: parseFloat(candle[4])
-                }));
-
-                // Cache slow timeframes with size limit to prevent unbounded growth
-                if (CACHEABLE_INTERVALS.has(interval)) {
-                    if (klinesCache.size >= CONFIG.MAX_CACHE_ENTRIES) {
-                        const oldestKey = klinesCache.keys().next().value;
-                        klinesCache.delete(oldestKey);
-                    }
-                    klinesCache.set(cacheKey, { candles, timestamp: Date.now() });
-                }
-
-                return candles;
-            } catch (error) {
-                return null;
-            }
+        function retryDelayMs(response, attempt) {
+            const header = response && response.headers ? response.headers.get('Retry-After') : null;
+            const seconds = Number(header);
+            if (Number.isFinite(seconds) && seconds >= 0) return Math.min(10000, seconds * 1000);
+            return 400 * 2 ** (attempt - 1);
         }
 
-
-        // Find swing lows in an array (for divergence detection)
-        function findSwingLows(values, lookback = CONFIG.SWING_LOOKBACK) {
-            const swings = [];
-            for (let i = lookback; i < values.length - lookback; i++) {
-                let isSwingLow = true;
-                for (let j = 1; j <= lookback; j++) {
-                    if (values[i] >= values[i - j] || values[i] >= values[i + j]) {
-                        isSwingLow = false;
-                        break;
-                    }
+        async function fetchMarketJson(url) {
+            const maxAttempts = 4;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                let response = null;
+                try {
+                    response = await fetch(url, { signal: AbortSignal.timeout(CONFIG.FETCH_TIMEOUT_MS) });
+                    if (response.ok) return await response.json();
+                    const status = response.status;
+                    const retry = status === 429 || status === 418 || status >= 500;
+                    if (!retry || attempt === maxAttempts) return null;
+                } catch (error) {
+                    if (attempt === maxAttempts) return null;
                 }
-                if (isSwingLow) {
-                    swings.push({ index: i, value: values[i] });
-                }
+                await sleep(retryDelayMs(response, attempt));
             }
-            return swings;
-        }
-
-        // Find swing highs in an array (for divergence detection)
-        function findSwingHighs(values, lookback = CONFIG.SWING_LOOKBACK) {
-            const swings = [];
-            for (let i = lookback; i < values.length - lookback; i++) {
-                let isSwingHigh = true;
-                for (let j = 1; j <= lookback; j++) {
-                    if (values[i] <= values[i - j] || values[i] <= values[i + j]) {
-                        isSwingHigh = false;
-                        break;
-                    }
-                }
-                if (isSwingHigh) {
-                    swings.push({ index: i, value: values[i] });
-                }
-            }
-            return swings;
-        }
-
-        // Detect divergence within the recent candle window
-        function detectDivergence(candles, rsiSeries) {
-            if (!candles || !rsiSeries || rsiSeries.length < CONFIG.DIVERGENCE_WINDOW) return null;
-
-            const lookback = CONFIG.DIVERGENCE_WINDOW + CONFIG.DIVERGENCE_BUFFER;
-
-            const recentCandles = candles.slice(-lookback);
-            const recentRSI = rsiSeries.slice(-lookback);
-
-            if (recentCandles.length < 10 || recentRSI.length < 10) return null;
-
-            const priceCloses = recentCandles.map(c => c.close);
-
-            const priceSwingLows = findSwingLows(priceCloses);
-            const priceSwingHighs = findSwingHighs(priceCloses);
-            const rsiSwingLows = findSwingLows(recentRSI);
-            const rsiSwingHighs = findSwingHighs(recentRSI);
-
-            // Check for Bullish Divergence:
-            // Price makes higher low while RSI makes lower low in oversold zone
-            if (priceSwingLows.length >= 2 && rsiSwingLows.length >= 2) {
-                const [priceLow1, priceLow2] = priceSwingLows.slice(-2);
-                const [rsiLow1, rsiLow2] = rsiSwingLows.slice(-2);
-
-                const priceDistance = priceLow2.index - priceLow1.index;
-                const rsiDistance = rsiLow2.index - rsiLow1.index;
-
-                if (priceDistance <= CONFIG.DIVERGENCE_WINDOW && priceDistance >= CONFIG.MIN_SWING_DISTANCE &&
-                    rsiDistance <= CONFIG.DIVERGENCE_WINDOW && rsiDistance >= CONFIG.MIN_SWING_DISTANCE) {
-                    if (priceLow2.value > priceLow1.value && rsiLow2.value < rsiLow1.value &&
-                        rsiLow2.value < CONFIG.OS_THRESHOLD) {
-                        return 'bullish';
-                    }
-                }
-            }
-
-            // Check for Bearish Divergence:
-            // Price makes higher high while RSI makes lower high in overbought zone
-            if (priceSwingHighs.length >= 2 && rsiSwingHighs.length >= 2) {
-                const [priceHigh1, priceHigh2] = priceSwingHighs.slice(-2);
-                const [rsiHigh1, rsiHigh2] = rsiSwingHighs.slice(-2);
-
-                const priceDistance = priceHigh2.index - priceHigh1.index;
-                const rsiDistance = rsiHigh2.index - rsiHigh1.index;
-
-                if (priceDistance <= CONFIG.DIVERGENCE_WINDOW && priceDistance >= CONFIG.MIN_SWING_DISTANCE &&
-                    rsiDistance <= CONFIG.DIVERGENCE_WINDOW && rsiDistance >= CONFIG.MIN_SWING_DISTANCE) {
-                    if (priceHigh2.value > priceHigh1.value && rsiHigh2.value < rsiHigh1.value &&
-                        rsiHigh2.value > CONFIG.OB_THRESHOLD) {
-                        return 'bearish';
-                    }
-                }
-            }
-
             return null;
         }
 
-        // Get all USDT pairs
-        async function getUSDTPairs() {
-            try {
-                const response = await fetch(
-                    buildApiUrl('/exchangeInfo'),
-                    { signal: AbortSignal.timeout(CONFIG.FETCH_TIMEOUT_MS) }
-                );
-                if (!response.ok) return [];
-                const data = await response.json();
-                return data.symbols
-                    .filter(s =>
-                        s.quoteAsset === 'USDT' &&
-                        s.status === 'TRADING' &&
-                        !s.symbol.includes('UP') &&
-                        !s.symbol.includes('DOWN') &&
-                        !s.symbol.includes('BEAR') &&
-                        !s.symbol.includes('BULL')
-                    )
-                    .map(s => ({
-                        symbol: s.symbol,
-                        baseAsset: s.baseAsset
-                    }));
-            } catch (error) {
-                console.error('Failed to fetch pairs:', error);
-                return [];
+        function readShowAll() {
+            return localStorage.getItem(CONFIG.SHOW_ALL_KEY) === '1';
+        }
+
+        function updateTagline() {
+            const el = document.getElementById('tagline');
+            if (!el) return;
+            const floor = readShowAll() ? 'all pairs' : '≥ $1M';
+            el.textContent = `// Binance USDT · ${floor} · closed candles`;
+        }
+
+        function updateLiquidityButton() {
+            const btn = document.getElementById('liquidityBtn');
+            if (!btn) return;
+            const floorOn = !readShowAll();
+            btn.textContent = floorOn ? '≥ $1M' : 'All pairs';
+            btn.classList.toggle('active', floorOn);
+            btn.title = floorOn
+                ? 'Showing pairs with at least $1M quote volume. Click to show every trading USDT pair.'
+                : 'Showing every trading USDT pair. Click to apply the $1M floor.';
+        }
+
+        function toggleLiquidity() {
+            if (readShowAll()) localStorage.removeItem(CONFIG.SHOW_ALL_KEY);
+            else localStorage.setItem(CONFIG.SHOW_ALL_KEY, '1');
+            updateLiquidityButton();
+            updateTagline();
+            if (scanning) {
+                rescanRequested = true;
+                return;
             }
+            startScan();
+        }
+
+        function divergenceConfig() {
+            return {
+                window: CONFIG.DIVERGENCE_WINDOW,
+                buffer: CONFIG.DIVERGENCE_BUFFER,
+                swingLookback: CONFIG.SWING_LOOKBACK,
+                minSwingDistance: CONFIG.MIN_SWING_DISTANCE,
+                os: CONFIG.OS_THRESHOLD,
+                ob: CONFIG.OB_THRESHOLD,
+            };
+        }
+
+        // Closed candles only. Cached until the next candle of this interval opens.
+        async function getKlines(symbol, interval, limit, now) {
+            const cacheKey = `${symbol}:${interval}`;
+            const closedOpen = ScannerCore.lastClosedOpen(interval, now);
+            const cached = klinesCache.get(cacheKey);
+            if (cached && cached.lastClosedOpen === closedOpen) {
+                scanCacheHits++;
+                return cached.candles;
+            }
+
+            scanCacheMisses++;
+            const data = await fetchMarketJson(
+                buildApiUrl(`/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`)
+            );
+            if (!data) return null;
+
+            const candles = ScannerCore.analysisCandles(data.map(candle => ({
+                openTime: candle[0],
+                open: parseFloat(candle[1]),
+                high: parseFloat(candle[2]),
+                low: parseFloat(candle[3]),
+                close: parseFloat(candle[4]),
+            })), interval, now);
+
+            if (klinesCache.size >= CONFIG.MAX_CACHE_ENTRIES) {
+                const oldestKey = klinesCache.keys().next().value;
+                klinesCache.delete(oldestKey);
+            }
+            klinesCache.set(cacheKey, { candles, lastClosedOpen: closedOpen });
+            return candles;
+        }
+
+        async function fetchMarketContext() {
+            const timeData = await fetchMarketJson(buildApiUrl('/time'));
+            const now = timeData && Number.isFinite(timeData.serverTime) ? timeData.serverTime : Date.now();
+            const [info, ticker] = await Promise.all([
+                fetchMarketJson(buildApiUrl('/exchangeInfo')),
+                fetchMarketJson(buildApiUrl('/ticker/24hr')),
+            ]);
+            if (!info || !Array.isArray(info.symbols) || !Array.isArray(ticker)) {
+                throw new Error('Could not load Binance market data.');
+            }
+            const volumeBySymbol = new Map();
+            for (const row of ticker) {
+                if (row && row.symbol) volumeBySymbol.set(row.symbol, Number(row.quoteVolume) || 0);
+            }
+            const pairs = ScannerCore.selectPairs(info.symbols, volumeBySymbol, {
+                minQuoteVolume: CONFIG.MIN_QUOTE_VOLUME_USDT,
+                showAll: readShowAll(),
+                starred: starredTokens,
+            }).map(pair => ({
+                ...pair,
+                quoteVolume: volumeBySymbol.get(pair.symbol) ?? 0,
+            }));
+            return { now, pairs };
         }
 
         // Determine status based on RSI values
@@ -1964,8 +1927,8 @@
         // Get divergence indicator
         function getDivergenceIndicator(divergence) {
             if (!divergence) return '';
-            if (divergence === 'bullish') return '<span class="rsi-indicator div-bullish" title="Bullish Divergence: Price higher low + RSI lower low">DIV↑</span>';
-            if (divergence === 'bearish') return '<span class="rsi-indicator div-bearish" title="Bearish Divergence: Price higher high + RSI lower high">DIV↓</span>';
+            if (divergence === 'bullish') return '<span class="rsi-indicator div-bullish" title="Bullish reversal — price lower low, RSI higher low, RSI still ≤ 30">DIV↑</span>';
+            if (divergence === 'bearish') return '<span class="rsi-indicator div-bearish" title="Bearish reversal — price higher high, RSI lower high, RSI still ≥ 70">DIV↓</span>';
             return '';
         }
 
@@ -1974,6 +1937,8 @@
             const percent = Math.round((current / total) * 100);
             document.getElementById('loadingProgress').textContent = message;
             document.getElementById('progressFill').style.width = `${percent}%`;
+            const refreshText = document.getElementById('refreshBarText');
+            if (refreshText) refreshText.textContent = message;
             // Agent-visible progress: body attrs + JSON-view status line
             document.body.setAttribute('data-scan-progress', `${current}/${total}`);
             document.body.setAttribute('data-scan-progress-message', message);
@@ -1984,14 +1949,14 @@
         }
 
         // Process a single trading pair: fetch candles, compute RSI, detect divergences
-        async function processPair(pair) {
+        async function processPair(pair, now) {
             const [candles4h, candles12h, candles1d, candles3d, candles1w, candles1M] = await Promise.all([
-                getKlines(pair.symbol, '4h', CONFIG.KLINES_LIMIT),
-                getKlines(pair.symbol, '12h', CONFIG.KLINES_LIMIT),
-                getKlines(pair.symbol, '1d', CONFIG.KLINES_LIMIT),
-                getKlines(pair.symbol, '3d', CONFIG.KLINES_LIMIT),
-                getKlines(pair.symbol, '1w', CONFIG.KLINES_LIMIT),
-                getKlines(pair.symbol, '1M', CONFIG.KLINES_LIMIT)
+                getKlines(pair.symbol, '4h', CONFIG.KLINES_LIMIT, now),
+                getKlines(pair.symbol, '12h', CONFIG.KLINES_LIMIT, now),
+                getKlines(pair.symbol, '1d', CONFIG.KLINES_LIMIT, now),
+                getKlines(pair.symbol, '3d', CONFIG.KLINES_LIMIT, now),
+                getKlines(pair.symbol, '1w', CONFIG.KLINES_LIMIT, now),
+                getKlines(pair.symbol, '1M', CONFIG.KLINES_LIMIT, now)
             ]);
 
             const timeframes = [
@@ -2009,9 +1974,9 @@
             for (const tf of timeframes) {
                 if (tf.candles) {
                     const closes = tf.candles.map(c => c.close);
-                    const rsi = calculateRSI(closes);
+                    const rsi = ScannerCore.calculateRSI(closes, CONFIG.RSI_PERIOD);
                     rsiResults[tf.key] = rsi.value;
-                    divResults[tf.key] = detectDivergence(tf.candles, rsi.series);
+                    divResults[tf.key] = ScannerCore.detectDivergence(tf.candles, rsi.series, divergenceConfig());
                 } else {
                     rsiResults[tf.key] = null;
                     divResults[tf.key] = null;
@@ -2038,6 +2003,10 @@
                 div3d: divResults['3d'],
                 div1w: divResults['1w'],
                 div1M: divResults['1M'],
+                quoteVolume: pair.quoteVolume,
+                extreme: ScannerCore.stackedExtreme(
+                    rsiResults['4h'], rsiResults['1d'], CONFIG.OS_THRESHOLD, CONFIG.OB_THRESHOLD
+                ),
                 status,
                 priority
             };
@@ -2052,14 +2021,24 @@
             const loadingOverlay = document.getElementById('loadingOverlay');
             const dataTable = document.getElementById('dataTable');
             const emptyState = document.getElementById('emptyState');
+            const refreshBar = document.getElementById('refreshBar');
+            const firstLoad = allData.length === 0;
+            let succeeded = false;
 
             refreshBtn.disabled = true;
-            loadingOverlay.classList.add('active');
-            dataTable.classList.remove('active');
-            emptyState.classList.remove('active');
+            scanCacheHits = 0;
+            scanCacheMisses = 0;
+            if (firstLoad) {
+                loadingOverlay.classList.add('active');
+                dataTable.classList.remove('active');
+                emptyState.classList.remove('active');
+                if (refreshBar) refreshBar.hidden = true;
+            } else {
+                loadingOverlay.classList.remove('active');
+                if (refreshBar) refreshBar.hidden = false;
+            }
             setScanState('loading');
 
-            // Stop countdown during scan
             if (countdownInterval) {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
@@ -2067,27 +2046,23 @@
             document.getElementById('countdown').textContent = '—:——';
 
             try {
-                // Get all USDT pairs
                 updateProgress(0, 100, 'Fetching trading pairs...');
-                const pairs = await getUSDTPairs();
+                const { now, pairs } = await fetchMarketContext();
 
                 if (pairs.length === 0) {
                     throw new Error('No pairs found');
                 }
 
-                allData = [];
+                const nextData = [];
                 const batchSize = CONFIG.BATCH_SIZE;
                 const maxConcurrentBatches = CONFIG.MAX_CONCURRENT_BATCHES;
                 let completedPairs = 0;
 
-                // Split pairs into batches
                 const batches = [];
                 for (let i = 0; i < pairs.length; i += batchSize) {
                     batches.push(pairs.slice(i, i + batchSize));
                 }
 
-                // Process batches with controlled concurrency
-                // Runs up to maxConcurrentBatches in parallel for ~3x faster scanning
                 let batchIndex = 0;
 
                 async function processNextBatch() {
@@ -2095,11 +2070,11 @@
                         const currentIndex = batchIndex++;
                         const batch = batches[currentIndex];
 
-                        const settled = await Promise.allSettled(batch.map(pair => processPair(pair)));
+                        const settled = await Promise.allSettled(batch.map(pair => processPair(pair, now)));
                         const results = settled
                             .filter(r => r.status === 'fulfilled')
                             .map(r => r.value);
-                        allData.push(...results.filter(r => r.rsi4h !== null || r.rsi1d !== null || r.rsi1w !== null));
+                        nextData.push(...results.filter(r => r.rsi4h !== null || r.rsi1d !== null || r.rsi1w !== null));
 
                         completedPairs += batch.length;
                         updateProgress(
@@ -2108,32 +2083,37 @@
                             `Scanning ${Math.min(completedPairs, pairs.length)} of ${pairs.length} pairs...`
                         );
 
-                        // Small delay between batches to respect rate limits
                         await new Promise(resolve => setTimeout(resolve, CONFIG.BATCH_DELAY_MS));
                     }
                 }
 
-                // Launch concurrent batch workers
                 const workers = [];
                 for (let w = 0; w < maxConcurrentBatches; w++) {
                     workers.push(processNextBatch());
                 }
                 await Promise.all(workers);
 
-                // Update stats
+                allData = nextData;
+                succeeded = true;
                 updateStats();
-
-                // Apply current filter and sort
                 applyFilterAndSort();
-
-                // Publish machine-readable payload + state
                 publishScannerData(allData.length > 0 ? 'ready' : 'empty');
 
-                // Show table
                 loadingOverlay.classList.remove('active');
+                if (!firstLoad && scanCacheMisses === 0 && refreshBar) {
+                    refreshBar.hidden = false;
+                    document.getElementById('refreshBarText').textContent =
+                        `Updated · ${allData.length} pairs · candles unchanged`;
+                } else if (refreshBar) {
+                    refreshBar.hidden = true;
+                }
                 if (filteredData.length > 0) {
                     dataTable.classList.add('active');
+                    emptyState.classList.remove('active');
+                    emptyState.textContent = 'No tokens match your filters.';
                 } else {
+                    dataTable.classList.remove('active');
+                    emptyState.textContent = 'No tokens match your filters.';
                     emptyState.classList.add('active');
                 }
 
@@ -2141,14 +2121,19 @@
                 console.error('Scan failed:', error);
                 loadingOverlay.classList.remove('active');
 
-                // If we have partial data, still show it
                 if (allData.length > 0) {
                     updateStats();
                     applyFilterAndSort();
                     publishScannerData('ready', error.message);
                     dataTable.classList.add('active');
+                    if (refreshBar) {
+                        refreshBar.hidden = false;
+                        document.getElementById('refreshBarText').textContent =
+                            'Refresh failed. Showing the last good scan.';
+                    }
                 } else {
-                    emptyState.textContent = 'Scan failed. Please try again.';
+                    if (refreshBar) refreshBar.hidden = true;
+                    emptyState.textContent = 'Could not load Binance market data.';
                     emptyState.classList.add('active');
                     publishScannerData('error', error.message);
                 }
@@ -2159,10 +2144,16 @@
                 startCountdown();
                 refreshBtn.disabled = false;
 
-                // Show when data was last fetched
-                const now = new Date();
-                document.getElementById('lastUpdated').textContent =
-                    now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                if (succeeded) {
+                    const now = new Date();
+                    document.getElementById('lastUpdated').textContent =
+                        now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+                if (rescanRequested) {
+                    rescanRequested = false;
+                    startScan();
+                    return;
+                }
             }
         }
 
@@ -2214,11 +2205,14 @@
                     '3d':  d.div3d,
                     '1w':  d.div1w,
                     '1M':  d.div1M
-                }
+                },
+                quote_volume_usdt: d.quoteVolume,
+                extreme: d.extreme
             }));
             const byStatus = s => allData
                 .filter(d => d.status === s)
                 .map(d => ({ symbol: d.baseAsset, pair: d.symbol }));
+            const showAll = readShowAll();
             return {
                 version: 1,
                 state,
@@ -2237,6 +2231,14 @@
                     bullish: byStatus('bullish'),
                     mixed:   byStatus('mixed'),
                     bearish: byStatus('bearish')
+                },
+                extremes: {
+                    oversold: allData.filter(d => d.extreme === 'oversold').map(d => ({ symbol: d.baseAsset, pair: d.symbol })),
+                    overbought: allData.filter(d => d.extreme === 'overbought').map(d => ({ symbol: d.baseAsset, pair: d.symbol })),
+                },
+                universe: {
+                    min_quote_volume_usdt: showAll ? 0 : CONFIG.MIN_QUOTE_VOLUME_USDT,
+                    show_all: showAll,
                 },
                 tokens
             };
@@ -2303,6 +2305,10 @@
                     matchesFilter = starredTokens.has(item.symbol);
                 } else if (currentFilter === 'divergence') {
                     matchesFilter = item.div4h || item.div12h || item.div1d || item.div3d || item.div1w || item.div1M;
+                } else if (currentFilter === 'oversold') {
+                    matchesFilter = item.extreme === 'oversold';
+                } else if (currentFilter === 'overbought') {
+                    matchesFilter = item.extreme === 'overbought';
                 } else {
                     matchesFilter = item.status === currentFilter;
                 }
@@ -2502,7 +2508,8 @@
                     th.querySelector('.sort-icon').textContent =
                         currentSort.direction === 'asc' ? '↑' : '↓';
                 } else {
-                    th.querySelector('.sort-icon').textContent = '↕';
+                    const icon = th.querySelector('.sort-icon');
+                    if (icon) icon.textContent = '↕';
                 }
             });
         }
@@ -2532,7 +2539,7 @@
         // Set filter
         function setFilter(filter) {
             currentFilter = filter;
-            document.querySelectorAll('.filter-btn').forEach(btn => {
+            document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.filter === filter);
             });
             applyFilterAndSort();
@@ -2635,6 +2642,15 @@
                 case 'd':
                     setFilter('divergence');
                     break;
+                case 'o':
+                    setFilter('oversold');
+                    break;
+                case 'k':
+                    setFilter('overbought');
+                    break;
+                case 'l':
+                    toggleLiquidity();
+                    break;
                 case 'f':
                     setFilter('strong');
                     break;
@@ -2683,6 +2699,8 @@
             }
             // Load CMC slugs in parallel with the scan. Re-render if the map
             // arrives after the first table paint so links use direct slugs.
+            updateLiquidityButton();
+            updateTagline();
             loadCmcSlugs().then(() => {
                 if (allData.length > 0) applyFilterAndSort();
             });
